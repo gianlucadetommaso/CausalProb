@@ -1,2 +1,2 @@
 # Causal-Inference
-A software for modelling and inference of causal scenarios.
+A software for causal probabilistic modelling and inference.
