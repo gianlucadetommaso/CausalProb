@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from models.linear_confounder_model import define_mechanisms
+from models.linear_selection_model import define_mechanisms
 
 import numpy as np
 import jax.numpy as jnp
@@ -9,8 +9,10 @@ from jax import grad, jvp, vmap, jacfwd
 from jax.config import config
 config.update("jax_enable_x64", True)
 
+from typing import Union
 
-class CausalInference:
+
+class StructuralEquationModel:
     def __init__(self):
         self.f, self.finv, self.lpdf_u, self.draw_u = define_mechanisms()
 
@@ -36,9 +38,6 @@ class CausalInference:
 
     def dlpdf_du(self, rv, u: dict):
         return vmap(lambda _u: jacfwd(self.lpdf_u[rv])(_u))(u[rv])
-
-    def dfv_du(self, rv, x: float, u: dict, o: dict, theta: dict):
-        return jnp.vectorize(jacfwd(lambda a: self.f[rv](u=a, theta=theta, parents={**o, 'X': x})), signature='(i)->(s,nv,nu)')(u[rv])
 
     def dfy_du(self, rv, x: float, u: dict, theta: dict):
         uo = {k: _u for k, _u in u.items() if _u.ndim == 1}
@@ -76,23 +75,25 @@ class CausalInference:
         def log_weight(i: int):
             ui = {k: _u[i] if _u.ndim > 1 else _u for k, _u in u.items()}
             vi = {k: _v[i] if _v.ndim > 1 else _v for k, _v in v.items()}
-            lp = lambda rv: self.lpdf_u[rv](ui[rv]) + jnp.sum(jnp.log(jnp.abs(jnp.diag(self.dfinv_dv(rv, vi, theta)))))
+
+            def lp(rv):
+                return self.lpdf_u[rv](ui[rv]) + jnp.sum(jnp.log(jnp.abs(jnp.diag(self.dfinv_dv(rv, vi, theta)))))
 
             lw = lp('X')
             for rv in o:
                 lw += lp(rv)
-
             return lw
 
         log_weights = jnp.vectorize(log_weight)(range(size))
         return u, v, jnp.exp(log_weights - jsp.special.logsumexp(log_weights))
 
-    def causal_effect(self, x: float, o: dict, theta: dict, size: int = 100000):
-        u, _, w = self.sample_u(x, o, theta, size)
+    def causal_effect(self, x: jnp.array, o: dict, theta: dict, size: int = 100000):
+        u, v, w = self.sample_u(x, o, theta, size)
 
         def _causal_effect(i: int):
-            ui = {k: _u[i] if _u.shape[0] == size else _u for k, _u in u.items()}
-            return jacfwd(lambda a: self.fill(ui, {'X': a}, theta, list(u.keys()))[1]['Y'])(x) * w[i, None, None]
+            ui = {k: _u[i] if _u.ndim > 1 else _u for k, _u in u.items()}
+            return jacfwd(lambda a: self.fill(ui, {'X': a}, theta, list(u.keys()))[1]['Y'])(x) * w[:, None, None]
+
         return jnp.sum(jnp.vectorize(_causal_effect, signature='(s)->(s,ny,nx)')(range(size)), 0)
 
     def causal_bias(self, x: float, o: dict, theta: dict, size: int = 100000):
@@ -113,7 +114,6 @@ class CausalInference:
             b = cb('X')
             for rv in o:
                 b -= jnp.matmul(cb(rv), self.dfv_dx(rv, x, ui, o, theta))
-
             return b * w[i, None, None]
         return jnp.sum(jnp.vectorize(_causal_bias, signature='(s)->(s,ny,nx)')(range(size)), 0)
 
@@ -121,19 +121,22 @@ class CausalInference:
 if __name__ == '__main__':
     # print(func())
 
-    theta0 = {'V1->X': 1., 'X->Y': 2., 'V1->Y': 3.}
+    # theta0 = {'V1->X': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
+    # theta0 = {'X->V1': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
+    theta0 = {'X->Y': jnp.array([1.]), 'X->V1': jnp.array([2.]), 'Y->V1': jnp.array([3.])}
+
     # theta0 = {'V1->X': jnp.array([1., 2.]), 'X->Y': jnp.array([3., 4.]), 'V1->Y': jnp.array([5., 6.])}
     # theta0 = {'X->V1': jnp.array([1., 2.]), 'X->Y': jnp.array([3., 4.]), 'V1->Y': jnp.array([5., 6.])}
     # theta0 = {'X->Y': jnp.array([1., 2.]), 'X->V1': jnp.array([3., 4.]), 'Y->V1': jnp.array([5., 6.])}
     alpha, beta, gamma = np.array(list(theta0.values()))
-    print('true bias', gamma * alpha / (1 + alpha ** 2))
+    # print('true bias', gamma * alpha / (1 + alpha ** 2))
     # print('true bias', -gamma * alpha)
-    # print('true bias', -gamma * (beta + gamma * alpha) / (1 + gamma ** 2))
+    print('true bias', -gamma * (beta + gamma * alpha) / (1 + gamma ** 2))
 
     sem = StructuralEquationModel()
     u, v = sem.fill({k: u(1) for k, u in sem.draw_u.items()}, {}, theta0, sem.draw_u.keys())
-    x = v['X'].squeeze()  # jnp.array([1., 2.])
-    o = {}#{'V1': v['V1'].squeeze()}  # {"V1": jnp.array([2., 3.])}
+    x = v['X'].squeeze(0)  # jnp.array([1., 2.])
+    o = {'V1': v['V1'].squeeze(0)}  # {"V1": jnp.array([2., 3.])}
 
     size = 1000000
     print("Causal effect: {}".format(sem.causal_effect(x, o, theta0, size=size)))

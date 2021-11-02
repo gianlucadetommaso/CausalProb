@@ -13,7 +13,7 @@ def lpdf_normal(x: jnp.array, mu=0, log_sigma=0):
     z = jnp.sum(z, -1) if z.ndim > 1 else jnp.sum(z)
     return -0.5 * (z - jnp.sum(log_sigma)) #- x.shape[0] * jnp.log(2 * jnp.pi))
 
-def define_mechanisms(n=2):
+def define_mechanisms(n=1):
     f, finv, lpdf_u, draw_u = dict(), dict(), dict(), dict()
 
     # X
