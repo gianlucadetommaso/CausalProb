@@ -14,7 +14,7 @@ def lp_normal(x: jnp.array, mu=0, log_sigma=0):
     return -0.5 * (z - jnp.sum(log_sigma)) #- x.shape[0] * jnp.log(2 * jnp.pi))
 
 
-def define_mechanisms(n=2):
+def define_model(dim=2):
     f, finv, lpu, draw_u = dict(), dict(), dict(), dict()
 
     # X
@@ -27,7 +27,7 @@ def define_mechanisms(n=2):
     finv['X'] = _finv
 
     lpu['X'] = lambda u: lp_normal(u)
-    draw_u['X'] = lambda size: jnp.array(np.random.normal(size=(size, n)))
+    draw_u['X'] = lambda size: jnp.array(np.random.normal(size=(size, dim)))
 
     # Y
     def _f(u: jnp.array, theta: dict, parents: dict):
@@ -41,7 +41,7 @@ def define_mechanisms(n=2):
     finv['Y'] = _finv
 
     lpu['Y'] = lambda u: lp_normal(u)
-    draw_u['Y'] = lambda size: jnp.array(np.random.normal(size=(size, n)))
+    draw_u['Y'] = lambda size: jnp.array(np.random.normal(size=(size, dim)))
 
     # V1
     def _f(u: jnp.array, theta: dict, parents: dict):
@@ -57,6 +57,6 @@ def define_mechanisms(n=2):
     finv['V1'] = _finv
 
     lpu['V1'] = lambda u: lp_normal(u)
-    draw_u['V1'] = lambda size: jnp.array(np.random.normal(size=(size, n)))
+    draw_u['V1'] = lambda size: jnp.array(np.random.normal(size=(size, dim)))
 
     return f, finv, lpu, draw_u

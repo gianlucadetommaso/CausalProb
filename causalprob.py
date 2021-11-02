@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from models.linear_confounder_model import define_mechanisms
+import models
 
 import numpy as np
 import jax.numpy as jnp
@@ -10,13 +10,13 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 
 
-class StructuralEquationModel:
+class CausalProb:
     """
     Given a user-specified probabilistic model, this class contains the necessary tools to infer marginal causal
     effect and marginal causal bias.
     """
-    def __init__(self):
-        self.f, self.finv, self.lpu, self.draw_u = define_mechanisms()
+    def __init__(self, model):
+        self.f, self.finv, self.lpu, self.draw_u = model
 
     def fill(self, u: dict, v: dict, theta: dict, rvs: list) -> tuple:
         """
@@ -336,8 +336,6 @@ class StructuralEquationModel:
 
 
 if __name__ == '__main__':
-    # print(func())
-
     # theta0 = {'V1->X': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
     # theta0 = {'X->V1': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
     # theta0 = {'X->Y': jnp.array([1.]), 'X->V1': jnp.array([2.]), 'Y->V1': jnp.array([3.])}
@@ -350,14 +348,15 @@ if __name__ == '__main__':
     # print('true bias', -gamma * alpha)
     # print('true bias', -gamma * (beta + gamma * alpha) / (1 + gamma ** 2))
 
-    sem = StructuralEquationModel()
-    u, v = sem.fill({k: u(1) for k, u in sem.draw_u.items()}, {}, theta0, sem.draw_u.keys())
+    from models.linear_confounder_model import define_model
+    cp = CausalProb(model=define_model())
+    u, v = cp.fill({k: u(1) for k, u in cp.draw_u.items()}, {}, theta0, cp.draw_u.keys())
     x = v['X'].squeeze(0)  # jnp.array([1., 2.])
     o = {'V1': v['V1'].squeeze(0)}  # {"V1": jnp.array([2., 3.])}
 
     n_samples = 1000000
-    print("Causal effect: {}".format(sem.causal_effect(x, o, theta0, n_samples=n_samples)))
-    print("Causal bias: {}".format(sem.causal_bias(x, o, theta0, n_samples=n_samples)))
+    print("Causal effect: {}".format(cp.causal_effect(x, o, theta0, n_samples=n_samples)))
+    print("Causal bias: {}".format(cp.causal_bias(x, o, theta0, n_samples=n_samples)))
     #
 
     # check derivatives wrt theta
