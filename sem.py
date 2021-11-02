@@ -63,11 +63,7 @@ class StructuralEquationModel:
         return jacfwd(lambda a: self.finv[rv](v=a, theta=theta, parents=v))(v[rv])
 
     def dfv_dtheta(self, rv, key, x: float, u: dict, o: dict, theta: dict):
-        def _replace_theta(a):
-            new_theta = {k: v for k, v in theta.items() if k != key}
-            new_theta[key] = a
-            return new_theta
-        return jnp.vectorize(jacfwd(lambda a: self.f[rv](u=u[rv], theta=_replace_theta(a), parents={**o, 'X': x})))(theta[key])
+        return jacfwd(lambda a: self.fill(u, {'X': x, **{k: _o for k, _o in o.items() if k != rv}}, {**theta, key: a}, list(u.keys()))[1][rv])(theta[key])
 
     def sample_u(self, x: float, o: dict, theta: dict, size: int):
         u, v = self.fill({k: u(size) for k, u in self.draw_u.items()}, {**o, 'X': x}, theta, self.draw_u.keys())
@@ -123,11 +119,11 @@ if __name__ == '__main__':
 
     # theta0 = {'V1->X': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
     # theta0 = {'X->V1': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
-    theta0 = {'X->Y': jnp.array([1.]), 'X->V1': jnp.array([2.]), 'Y->V1': jnp.array([3.])}
+    # theta0 = {'X->Y': jnp.array([1.]), 'X->V1': jnp.array([2.]), 'Y->V1': jnp.array([3.])}
 
     # theta0 = {'V1->X': jnp.array([1., 2.]), 'X->Y': jnp.array([3., 4.]), 'V1->Y': jnp.array([5., 6.])}
     # theta0 = {'X->V1': jnp.array([1., 2.]), 'X->Y': jnp.array([3., 4.]), 'V1->Y': jnp.array([5., 6.])}
-    # theta0 = {'X->Y': jnp.array([1., 2.]), 'X->V1': jnp.array([3., 4.]), 'Y->V1': jnp.array([5., 6.])}
+    theta0 = {'X->Y': jnp.array([1., 2.]), 'X->V1': jnp.array([3., 4.]), 'Y->V1': jnp.array([5., 6.])}
     alpha, beta, gamma = np.array(list(theta0.values()))
     # print('true bias', gamma * alpha / (1 + alpha ** 2))
     # print('true bias', -gamma * alpha)
@@ -143,3 +139,11 @@ if __name__ == '__main__':
     print("Causal bias: {}".format(sem.causal_bias(x, o, theta0, size=size)))
     #
     # print(sem.dfv_dtheta('X', 'V1->X', x, u, v, theta0))
+
+    print('x', x)
+    print('o', o)
+
+    u, v = sem.fill({k: u(3) for k, u in sem.draw_u.items()}, {}, theta0, sem.draw_u.keys())
+    for rv in v:
+        for key in theta0:
+            print('df[{}]_dtheta[{}]'.format(rv, key), sem.dfv_dtheta(rv, key, x, u, o, theta0))
