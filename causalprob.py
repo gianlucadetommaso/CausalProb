@@ -207,7 +207,7 @@ class CausalProb:
         key: str
             It specifies the parameter to differentiate upon.
         u: dict
-            Values of U where the gradient should be evaluated.
+            Values of U variables where the gradient should be evaluated.
         x: jnp.array
             Observation of treatment X.
         o: dict
@@ -222,6 +222,37 @@ class CausalProb:
             `u` and `theta`, when values `x` of X and `o` of O are observed.
         """
         return jacfwd(lambda a: self.fill(u, {'X': x, **{k: _o for k, _o in o.items() if k != rv}}, {**theta, key: a}, list(u.keys()))[1][rv])(theta[key])
+
+    def log_likelihood(self, u: dict, x: jnp.array, o: dict, theta: dict, v: dict = None) -> jnp.array:
+        """
+        It evaluate the log-likelihood at `u` given values `x` of X and `o` of O.
+
+        u: dict
+            Values of U variables where the likelihood should be evaluated.
+        x: jnp.array
+            Observation of treatment X.
+        o: dict
+            Values of observed random variables O.
+        theta: dict
+            Model parameters.
+        v: dict
+            Values of V variables. If these are not passed, they are computed from the values `u` of U.
+
+        Returns
+        -------
+        llkd: jnp.array
+            log-likelihood evaluation.
+        """
+        if v is None:
+            u, v = self.fill(u, {'X': x, **o}, theta, list(u.keys()))
+
+        def _lp(rv):
+            return self.lpu[rv](u[rv]) + jnp.sum(jnp.log(jnp.abs(jnp.diag(self.dfinvv_dv(rv, v, theta)))))
+
+        llkd = _lp('X')
+        for rv in o:
+            llkd += _lp(rv)
+        return llkd
 
     def sample_u(self, x: jnp.array, o: dict, theta: dict, n_samples: int) -> tuple:
         """
@@ -250,14 +281,7 @@ class CausalProb:
         def log_weight(i: int):
             ui = {k: _u[i] if _u.ndim > 1 else _u for k, _u in u.items()}
             vi = {k: _v[i] if _v.ndim > 1 else _v for k, _v in v.items()}
-
-            def lp(rv):
-                return self.lpu[rv](ui[rv]) + jnp.sum(jnp.log(jnp.abs(jnp.diag(self.dfinvv_dv(rv, vi, theta)))))
-
-            lw = lp('X')
-            for rv in o:
-                lw += lp(rv)
-            return lw
+            return self.log_likelihood(ui, x, o, theta, vi)
 
         log_weights = jnp.vectorize(log_weight)(range(n_samples))
         return u, v, jnp.exp(log_weights - jsp.special.logsumexp(log_weights))

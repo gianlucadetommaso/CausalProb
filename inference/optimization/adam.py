@@ -40,7 +40,7 @@ def adam(loss, grad_loss, theta0: jnp.array, n_iter: int = 10000, alpha: float =
 
     # store losses
     _loss = loss(theta)
-    losses = [loss]
+    losses = [_loss]
 
     # printing output
     strf = "{:<5} {:<15}"
