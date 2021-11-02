@@ -8,14 +8,14 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 
 
-def lpdf_normal(x: jnp.array, mu=0, log_sigma=0):
+def lp_normal(x: jnp.array, mu=0, log_sigma=0):
     z = ((x - mu) / jnp.exp(log_sigma)) ** 2
     z = jnp.sum(z, -1) if z.ndim > 1 else jnp.sum(z)
     return -0.5 * (z - jnp.sum(log_sigma)) #- x.shape[0] * jnp.log(2 * jnp.pi))
 
 
-def define_mechanisms(n=1):
-    f, finv, lpdf_u, draw_u = dict(), dict(), dict(), dict()
+def define_mechanisms(n=2):
+    f, finv, lpu, draw_u = dict(), dict(), dict(), dict()
 
     # X
     def _f(u: jnp.array, theta: dict, parents: dict):
@@ -26,7 +26,7 @@ def define_mechanisms(n=1):
         return v
     finv['X'] = _finv
 
-    lpdf_u['X'] = lambda u: lpdf_normal(u)
+    lpu['X'] = lambda u: lp_normal(u)
     draw_u['X'] = lambda size: jnp.array(np.random.normal(size=(size, n)))
 
     # Y
@@ -40,7 +40,7 @@ def define_mechanisms(n=1):
         return v - theta['X->Y'] * x
     finv['Y'] = _finv
 
-    lpdf_u['Y'] = lambda u: lpdf_normal(u)
+    lpu['Y'] = lambda u: lp_normal(u)
     draw_u['Y'] = lambda size: jnp.array(np.random.normal(size=(size, n)))
 
     # V1
@@ -56,7 +56,7 @@ def define_mechanisms(n=1):
 
     finv['V1'] = _finv
 
-    lpdf_u['V1'] = lambda u: lpdf_normal(u)
+    lpu['V1'] = lambda u: lp_normal(u)
     draw_u['V1'] = lambda size: jnp.array(np.random.normal(size=(size, n)))
 
-    return f, finv, lpdf_u, draw_u
+    return f, finv, lpu, draw_u
