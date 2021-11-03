@@ -1,5 +1,6 @@
 from causalprob import CausalProb
 from inference.optimization.adam import adam
+from tools.structures import pack, unpack
 
 import jax.numpy as jnp
 
@@ -25,7 +26,7 @@ def train(model, x: jnp.array, o: jnp.array, theta0: jnp.array, n_samples: int =
             vi = {k: _v[i] if _v.ndim > 1 else _v for k, _v in v.items()}
 
             lkd = jnp.exp(cp.llkd(ui, x, o, _theta, vi))
-            dllkd_dtheta = {key: cp.dllkd_dtheta(key, ui, x, o, theta, vi) for key in theta}
+            dllkd_dtheta = pack({key: cp.dllkd_dtheta(key, ui, x, o, _theta, vi) for key in theta})
             dlpu_dtheta = cp.dlpu_dtheta()
             return (dlpu_dtheta + dllkd_dtheta) * lkd
 

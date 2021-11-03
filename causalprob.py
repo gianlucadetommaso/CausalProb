@@ -90,7 +90,7 @@ class CausalProb:
         """
         return self.fill(u, {'X': x}, theta, list(u.keys()))[1]['Y']
 
-    def dlpu_du(self, rv, u: dict) -> jnp.array:
+    def dlpu_du(self, rv, u: dict, theta: dict) -> jnp.array:
         """
         This method differentiates the log-probability density of U_{`rv`} with respect to U_{`rv`}.
 
@@ -100,6 +100,8 @@ class CausalProb:
             It specifies random variable to differentiate upon.
         u: dict
             Values of U where the gradient should be evaluated.
+        theta: dict
+            Model parameters.
 
         Returns
         -------
@@ -107,7 +109,30 @@ class CausalProb:
             It returns the gradient of the log-probability density of U_{`rv`} with respect to U_{`rv`} evaluated at the
             values in `u`.
         """
-        return vmap(lambda _u: grad(self.lpu[rv])(_u))(u[rv])
+        return vmap(lambda _u: grad(self.lpu[rv])(_u, theta))(u[rv])
+
+    def dlpu_dtheta(self, rv, key, u: dict, theta: dict) -> jnp.array:
+        """
+        This method differentiates the log-probability density of U_{`rv`} with respect to \theta_{`key`}.
+
+        Parameters
+        ----------
+        rv: str
+            It specifies which marginal log-prior density function to differentiate.
+        key: str
+            It specifies the parameter to differentiate upon.
+        u: dict
+            Values of U where the gradient should be evaluated.
+        theta: dict
+            Model parameters.
+
+        Returns
+        -------
+        dlpu_dtheta: jnp.array
+            It returns the gradient of the log-probability density of U_{`rv`} with respect to \theta_{`key`} evaluated
+            at the values in `u`.
+        """
+        return grad(lambda a: self.lpu[rv](u, {**theta, key: a}))(theta[key])
 
     def dfy_du(self, rv: str, u: dict, x: jnp.array, theta: dict) -> jnp.array:
         """
@@ -247,8 +272,7 @@ class CausalProb:
             u, v = self.fill(u, {'X': x, **o}, theta, list(u.keys()))
 
         def _lp(rv):
-            print(rv, self.dfinvv_dv(rv, v, theta))
-            return self.lpu[rv](u[rv]) + jnp.sum(jnp.log(jnp.abs(jnp.diag(self.dfinvv_dv(rv, v, theta)))))
+            return self.lpu[rv](u[rv], theta) + jnp.sum(jnp.log(jnp.abs(jnp.diag(self.dfinvv_dv(rv, v, theta)))))
 
         llkd = _lp('X')
         for rv in o:
@@ -373,7 +397,7 @@ class CausalProb:
 
             def cb(rv):
                 dfy_du = self.dfy_du(rv, ui, x, theta)
-                dlpu_du = self.dlpu_du(rv, ui)[:, None, :] if ui[rv].ndim > 1 else self.dlpu_du(rv, ui)[None, None, :]
+                dlpu_du = self.dlpu_du(rv, ui, theta)[:, None, :] if ui[rv].ndim > 1 else self.dlpu_du(rv, ui, theta)[None, None, :]
                 dfinvv_dv = self.dfinvv_dv(rv, vi, theta)
                 return jnp.matmul(dfy_du + ru[i, :, None] * dlpu_du, dfinvv_dv)
 

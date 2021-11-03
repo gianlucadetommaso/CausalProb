@@ -6,10 +6,9 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 
 
-def lp_normal(x: jnp.array, mu=0, log_sigma=0):
-    z = ((x - mu) / jnp.exp(log_sigma)) ** 2
-    z = jnp.sum(z, -1) if z.ndim > 1 else jnp.sum(z)
-    return -0.5 * (z - jnp.sum(log_sigma)) #- x.shape[0] * jnp.log(2 * jnp.pi))
+def lp_standard_normal(x: jnp.array, theta: dict):
+    z = jnp.sum(x ** 2, -1) if x.ndim > 1 else jnp.sum(x ** 2)
+    return -0.5 * z #- x.shape[0] * jnp.log(2 * jnp.pi))
 
 
 def define_model(dim=2):
@@ -24,7 +23,7 @@ def define_model(dim=2):
         return v
     finv['X'] = _finv
 
-    lpu['X'] = lambda u: lp_normal(u)
+    lpu['X'] = lambda u, theta: lp_standard_normal(u, theta)
     draw_u['X'] = lambda size: jnp.array(np.random.normal(size=(size, dim)))
 
     # V1
@@ -38,7 +37,7 @@ def define_model(dim=2):
         return v - theta['X->V1'] * x
     finv['V1'] = _finv
 
-    lpu['V1'] = lambda u: lp_normal(u)
+    lpu['V1'] = lambda u, theta: lp_standard_normal(u, theta)
     draw_u['V1'] = lambda size: jnp.array(np.random.normal(size=(size, dim)))
 
     # Y
@@ -54,7 +53,7 @@ def define_model(dim=2):
 
     finv['Y'] = _finv
 
-    lpu['Y'] = lambda u: lp_normal(u)
+    lpu['Y'] = lambda u, theta: lp_standard_normal(u, theta)
     draw_u['Y'] = lambda size: jnp.array(np.random.normal(size=(size, dim)))
 
     return f, finv, lpu, draw_u
