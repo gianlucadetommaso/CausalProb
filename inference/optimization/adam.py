@@ -32,7 +32,7 @@ def adam(loss, grad_loss, theta0: jnp.array, n_iter: int = 10000, alpha: float =
         It returns the final state and the history of loss functions.
     """
     # initialize location
-    theta = jnp.copy(theta0)
+    theta = theta0.copy()
 
     # initialize ADAM parameters
     m1, m2 = 0.0, 0.0
@@ -63,6 +63,6 @@ def adam(loss, grad_loss, theta0: jnp.array, n_iter: int = 10000, alpha: float =
         losses.append(_loss)
 
         # print loss
-        print(strf.format(0, _loss))
+        print(strf.format(t, _loss))
 
     return theta, losses

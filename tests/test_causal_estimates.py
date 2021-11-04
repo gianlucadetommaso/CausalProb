@@ -8,7 +8,7 @@ import numpy as np
 def test_model_causal_estimates(model, theta, true_causal_effect, true_causal_bias):
     cp = CausalProb(model=model)
 
-    u, v = cp.fill({k: u(1) for k, u in cp.draw_u.items()}, {}, theta, cp.draw_u.keys())
+    u, v = cp.fill({k: u(1, theta) for k, u in cp.draw_u.items()}, {}, theta, cp.draw_u.keys())
     x = v['X'].squeeze(0)
     o = {'V1': v['V1'].squeeze(0)}
 

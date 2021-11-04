@@ -24,7 +24,7 @@ def define_model(dim=2):
     finv['X'] = _finv
 
     lpu['X'] = lambda u, theta: lp_standard_normal(u, theta)
-    draw_u['X'] = lambda size: jnp.array(np.random.normal(size=(size, dim)))
+    draw_u['X'] = lambda size, theta: jnp.array(np.random.normal(size=(size, dim)))
 
     # Y
     def _f(u: jnp.array, theta: dict, parents: dict):
@@ -38,7 +38,7 @@ def define_model(dim=2):
     finv['Y'] = _finv
 
     lpu['Y'] = lambda u, theta: lp_standard_normal(u, theta)
-    draw_u['Y'] = lambda size: jnp.array(np.random.normal(size=(size, dim)))
+    draw_u['Y'] = lambda size, theta: jnp.array(np.random.normal(size=(size, dim)))
 
     # V1
     def _f(u: jnp.array, theta: dict, parents: dict):
@@ -54,6 +54,6 @@ def define_model(dim=2):
     finv['V1'] = _finv
 
     lpu['V1'] = lambda u, theta: lp_standard_normal(u, theta)
-    draw_u['V1'] = lambda size: jnp.array(np.random.normal(size=(size, dim)))
+    draw_u['V1'] = lambda size, theta: jnp.array(np.random.normal(size=(size, dim)))
 
     return f, finv, lpu, draw_u

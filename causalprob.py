@@ -113,7 +113,7 @@ class CausalProb:
 
     def dlpu_dtheta(self, rv, key, u: dict, theta: dict) -> jnp.array:
         """
-        This method differentiates the log-probability density of U_{`rv`} with respect to \theta_{`key`}.
+        It differentiates the log-probability density of U_{`rv`} with respect to \theta_{`key`}.
 
         Parameters
         ----------
@@ -132,7 +132,7 @@ class CausalProb:
             It returns the gradient of the log-probability density of U_{`rv`} with respect to \theta_{`key`} evaluated
             at the values in `u`.
         """
-        return grad(lambda a: self.lpu[rv](u, {**theta, key: a}))(theta[key])
+        return grad(lambda a: self.lpu[rv](u[rv], {**theta, key: a}))(theta[key])
 
     def dfy_du(self, rv: str, u: dict, x: jnp.array, theta: dict) -> jnp.array:
         """
@@ -214,10 +214,12 @@ class CausalProb:
             It returns the Jacobian of the structural equation f^{-1}_{V_{`rv`}} with respect to V_{`rv`} evaluated at
             the values in `v`.
         """
+
         o = {k: _v for k, _v in v.items() if _v.ndim == 1}
         l = {k: _v for k, _v in v.items() if _v.ndim > 1}
+
         if len(l) > 0:
-            return vmap(lambda _l: jacfwd(lambda _a: self.finv[rv](v=_a, theta=theta, parents={**o, **{k: _v for k, _v in _l.items()}}))(v[rv]))(l)
+            return vmap(lambda _l: jacfwd(lambda a: self.finv[rv](v=a, theta=theta, parents={**o, **_l}))(v[rv]))(l)
         return jacfwd(lambda a: self.finv[rv](v=a, theta=theta, parents=v))(v[rv])
 
     def dfv_dtheta(self, rv: str, key: str, u: dict, x: float, o: dict, theta: dict) -> jnp.array:
@@ -268,18 +270,24 @@ class CausalProb:
         llkd: jnp.array
             log-likelihood evaluation.
         """
-        if v is None:
-            u, v = self.fill(u, {'X': x, **o}, theta, list(u.keys()))
+        def _llkd(_u, xj, oj, _v):
+            if _v is None:
+                _u, _v = self.fill(_u, {'X': xj, **oj}, theta, list(u.keys()))
 
-        def _lp(rv):
-            return self.lpu[rv](u[rv], theta) + jnp.sum(jnp.log(jnp.abs(jnp.diag(self.dfinvv_dv(rv, v, theta)))))
+            def _lp(rv):
+                return self.lpu[rv](_u[rv], theta) + jnp.sum(jnp.log(jnp.abs(jnp.diag(self.dfinvv_dv(rv, _v, theta)))))
 
-        llkd = _lp('X')
-        for rv in o:
-            llkd += _lp(rv)
-        return llkd
+            llkd = _lp('X')
+            for rv in oj:
+                llkd += _lp(rv)
 
-    def dllkd_dtheta(self, key: str, u: dict, x: jnp.array, o: dict, theta: dict, v: dict = None) -> jnp.array:
+            return llkd
+
+        if x.ndim > 1:
+            return vmap(lambda xj, oj: _llkd(u, xj, oj, v), (0, {k: 0 for k in o}))(x, o)
+        return _llkd(u, x, o, v)
+
+    def dllkd_dtheta(self, key: str, u: dict, x: jnp.array, o: dict, theta: dict) -> jnp.array:
         """
         It evaluates the gradient of the log-likelihood with respect to \theta_{`key`}.
 
@@ -295,15 +303,18 @@ class CausalProb:
             Values of observed random variables O.
         theta: dict
             Model parameters.
-        v: dict
-            Values of V variables. If these are not passed, they are computed from the values `u` of U.
 
         Returns
         -------
         dllkd_dtheta: jnp.array
             Gradient evaluation of the log-likelihood with respect to \theta_{`key`}.
         """
-        return grad(lambda a: self.llkd(u, x, o, {**theta, key: a}, v))(theta[key])
+        def _dllkd_dtheta(xj, oj):
+            return grad(lambda a: self.llkd(u, xj, oj, {**theta, key: a}))(theta[key])
+
+        if x.ndim > 1:
+            return vmap(_dllkd_dtheta, (0, {k: 0 for k in o}))(x, o)
+        return _dllkd_dtheta(x, o)
 
     def sample_u(self, x: jnp.array, o: dict, theta: dict, n_samples: int) -> tuple:
         """
@@ -314,7 +325,7 @@ class CausalProb:
         ----------
         x: jnp.array
             Observation of treatment X.
-        o: dict
+        o: dictself.lpu[rv](u[rv], theta)
             Values of observed random variables O.
         theta: dict
             Model parameters.
@@ -327,7 +338,7 @@ class CausalProb:
             It returns coherent samples from the prior `u` for U and `v` for V given the observations `x` of X and `o`
             of O, as well as the the importance weights `w` to get samples from the posterior.
         """
-        u, v = self.fill({k: u(n_samples) for k, u in self.draw_u.items()}, {**o, 'X': x}, theta, self.draw_u.keys())
+        u, v = self.fill({k: u(n_samples, theta) for k, u in self.draw_u.items()}, {**o, 'X': x}, theta, self.draw_u.keys())
 
         def log_weight(i: int):
             ui = {k: _u[i] if _u.ndim > 1 else _u for k, _u in u.items()}
@@ -358,13 +369,18 @@ class CausalProb:
         c: jnp.array
             It returns an estimate of the marginal causal effect.
         """
-        u, v, w = self.sample_u(x, o, theta, n_samples)
+        def _causal_effect(xj, oj):
+            u, v, w = self.sample_u(xj, oj, theta, n_samples)
 
-        def _causal_effect(i: int):
-            ui = {k: _u[i] if _u.ndim > 1 else _u for k, _u in u.items()}
-            return jacfwd(lambda a: self.fill(ui, {'X': a}, theta, list(u.keys()))[1]['Y'])(x) * w[:, None, None]
+            def __causal_effect(i: int):
+                ui = {k: _u[i] if _u.ndim > 1 else _u for k, _u in u.items()}
+                return jacfwd(lambda a: self.fill(ui, {'X': a}, theta, list(u.keys()))[1]['Y'])(xj) * w[:, None, None]
 
-        return jnp.sum(jnp.vectorize(_causal_effect, signature='(s)->(s,ny,nx)')(range(n_samples)), 0)
+            return jnp.sum(jnp.vectorize(__causal_effect, signature='(s)->(s,ny,nx)')(range(n_samples)), 0)
+
+        if x.ndim > 1:
+            return vmap(_causal_effect, (0, {k: 0 for k in o}))(x, o)
+        return _causal_effect(x, o)
 
     def causal_bias(self, x: jnp.array, o: dict, theta: dict, n_samples: int = 100000) -> jnp.array:
         """
@@ -387,25 +403,30 @@ class CausalProb:
         b: jnp.array
             It returns an estimate of the marginal causal bias.
         """
-        u, v, w = self.sample_u(x, o, theta, n_samples)
-        y = self.fy(u, x, theta)
-        ru = y - jnp.sum(y * w[:, None], 0, keepdims=True)
+        def _causal_bias(xj, oj):
+            u, v, w = self.sample_u(xj, oj, theta, n_samples)
+            y = self.fy(u, xj, theta)
+            ru = y - jnp.sum(y * w[:, None], 0, keepdims=True)
 
-        def _causal_bias(i: int):
-            ui = {k: _u[i] if _u.ndim > 1 else _u for k, _u in u.items()}
-            vi = {k: _v[i] if _v.ndim > 1 else _v for k, _v in v.items()}
+            def __causal_bias(i: int):
+                ui = {k: _u[i] if _u.ndim > 1 else _u for k, _u in u.items()}
+                vi = {k: _v[i] if _v.ndim > 1 else _v for k, _v in v.items()}
 
-            def cb(rv):
-                dfy_du = self.dfy_du(rv, ui, x, theta)
-                dlpu_du = self.dlpu_du(rv, ui, theta)[:, None, :] if ui[rv].ndim > 1 else self.dlpu_du(rv, ui, theta)[None, None, :]
-                dfinvv_dv = self.dfinvv_dv(rv, vi, theta)
-                return jnp.matmul(dfy_du + ru[i, :, None] * dlpu_du, dfinvv_dv)
+                def cb(rv):
+                    dfy_du = self.dfy_du(rv, ui, xj, theta)
+                    dlpu_du = self.dlpu_du(rv, ui, theta)[:, None, :] if ui[rv].ndim > 1 else self.dlpu_du(rv, ui, theta)[None, None, :]
+                    dfinvv_dv = self.dfinvv_dv(rv, vi, theta)
+                    return jnp.matmul(dfy_du + ru[i, :, None] * dlpu_du, dfinvv_dv)
 
-            b = cb('X')
-            for rv in o:
-                b -= jnp.matmul(cb(rv), self.dfv_dx(rv, ui, x, o, theta))
-            return b * w[i, None, None]
-        return jnp.sum(jnp.vectorize(_causal_bias, signature='(s)->(s,ny,nx)')(range(n_samples)), 0)
+                b = cb('X')
+                for rv in oj:
+                    b -= jnp.matmul(cb(rv), self.dfv_dx(rv, ui, xj, oj, theta))
+                return b * w[i, None, None]
+            return jnp.sum(jnp.vectorize(__causal_bias, signature='(s)->(s,ny,nx)')(range(n_samples)), 0)
+
+        if x.ndim > 1:
+            return vmap(_causal_bias, (0, {k: 0 for k in o}))(x, o)
+        return _causal_bias(x, o)
 
 
 if __name__ == '__main__':
@@ -423,9 +444,9 @@ if __name__ == '__main__':
 
     from models.linear_confounder_model import define_model
     cp = CausalProb(model=define_model())
-    u, v = cp.fill({k: u(1) for k, u in cp.draw_u.items()}, {}, theta0, cp.draw_u.keys())
-    x = v['X'].squeeze(0)  # jnp.array([1., 2.])
-    o = {'V1': v['V1'].squeeze(0)}  # {"V1": jnp.array([2., 3.])}
+    u, v = cp.fill({k: u(1, theta0) for k, u in cp.draw_u.items()}, {}, theta0, cp.draw_u.keys())
+    x = v['X'].squeeze(0)
+    o = {'V1': v['V1'].squeeze(0)}
 
     n_samples = 1000000
     print("Causal effect: {}".format(cp.causal_effect(x, o, theta0, n_samples=n_samples)))
@@ -440,3 +461,7 @@ if __name__ == '__main__':
     # for rv in v:
     #     for key in theta0:
     #         print('df[{}]_dtheta[{}]'.format(rv, key), sem.dfv_dtheta(rv, key, u, x, o, theta0))
+    ui = {k: _u[0] if _u.ndim > 1 else _u for k, _u in u.items()}
+    for key in theta0:
+        print(key, 'dllkd_dtheta', cp.dllkd_dtheta(key, ui, x, o, theta0))
+        print()
