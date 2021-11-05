@@ -40,16 +40,16 @@ def adam(loss, grad_loss, theta0: jnp.array, n_iter: int = 10000, alpha: float =
 
     # store losses
     _loss = loss(theta)
+    d = -grad_loss(theta)
     losses = [_loss]
 
     # printing output
-    strf = "{:<5} {:<15}"
-    print(strf.format(0, _loss))
+    strf = "{:<10} {:<25} {:<25}"
+    print(strf.format("iter", "loss", "||grad(loss)||"))
+    print(60 * '-')
+    print(strf.format(0, _loss, jnp.linalg.norm(d)))
 
     for t in range(1, n_iter):
-        # compute update direction
-        d = -grad_loss(theta)
-
         # update ADAM parameters
         m1 = beta1 * m1 + (1 - beta1) * d
         m2 = beta2 * m2 + (1 - beta2) * d ** 2
@@ -62,7 +62,10 @@ def adam(loss, grad_loss, theta0: jnp.array, n_iter: int = 10000, alpha: float =
         _loss = loss(theta)
         losses.append(_loss)
 
+        # compute update direction
+        d = -grad_loss(theta)
+
         # print loss
-        print(strf.format(t, _loss))
+        print(strf.format(t, _loss, jnp.linalg.norm(d)))
 
     return theta, losses
