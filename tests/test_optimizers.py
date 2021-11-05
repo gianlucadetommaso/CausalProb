@@ -4,6 +4,7 @@ import unittest
 import jax.numpy as jnp
 import numpy as np
 
+
 def quadratic(m=3):
     return lambda x: (x - 3) ** 2, lambda x: 2 * (x - 3)
 
