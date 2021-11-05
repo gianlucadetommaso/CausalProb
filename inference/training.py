@@ -102,7 +102,7 @@ def train(model, x: jnp.array, y: jnp.array, o: jnp.array, theta0: jnp.array, n_
                     llkd = cp.llkd(ui, xj, oyj, unpacked_theta)
                     return dlpu_dtheta * llkd + dllkd_dtheta
 
-            return -jnp.mean(jnp.vectorize(__dloss_dtheta, signature=('()->(ntheta)'))(range(n_samples)), 0)
+            return -jnp.mean(jnp.vectorize(__dloss_dtheta, signature='()->(ntheta)')(range(n_samples)), 0)
 
         if x.ndim > 1:
             return jnp.sum(vmap(_dloss_dtheta, (0, {k: 0 for k in oy}))(x, oy), 0)

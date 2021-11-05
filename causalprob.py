@@ -275,7 +275,7 @@ class CausalProb:
                 _u, _v = self.fill(_u, {'X': xj, **oj}, theta, list(u.keys()))
 
             def _lp(rv):
-                return self.lpu[rv](_u[rv], theta) + jnp.sum(jnp.log(jnp.abs(jnp.diag(self.dfinvv_dv(rv, _v, theta)))))
+                return self.lpu[rv](_u[rv], theta) + jnp.sum(jnp.log(jnp.abs(jnp.linalg.det(self.dfinvv_dv(rv, _v, theta)))))
 
             llkd = _lp('X')
             for rv in oj:
