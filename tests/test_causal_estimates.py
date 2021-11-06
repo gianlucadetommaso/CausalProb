@@ -11,7 +11,7 @@ def test_model_causal_estimates(cp, x, o, theta, true_causal_effect, true_causal
     est_causal_bias = cp.causal_bias(x=x, o=o, theta=theta, n_samples=n_samples)
 
     assert jnp.allclose(true_causal_effect, est_causal_effect, atol=1e-2, rtol=1e-2)
-    assert jnp.allclose(true_causal_bias, est_causal_bias, atol=1e-2, rtol=1e-2)
+    assert jnp.allclose(true_causal_bias, est_causal_bias, atol=1e-1, rtol=1e-1)
 
 
 class TestCausalEstimates(unittest.TestCase):

@@ -275,7 +275,7 @@ class CausalProb:
                 _u, _v = self.fill(_u, {'X': xj, **oj}, theta, list(u.keys()))
 
             def _lp(rv):
-                return self.lpu[rv](_u[rv], theta) + jnp.sum(jnp.log(jnp.abs(jnp.linalg.det(self.dfinvv_dv(rv, _v, theta)))))
+                return self.lpu[rv](_u[rv], theta) + jnp.log(jnp.abs(jnp.linalg.det(self.dfinvv_dv(rv, _v, theta))))
 
             llkd = _lp('X')
             for rv in oj:
@@ -430,11 +430,11 @@ class CausalProb:
 
 
 if __name__ == '__main__':
-    # theta0 = {'V1->X': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
+    theta0 = {'V1->X': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
     # theta0 = {'X->V1': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
     # theta0 = {'X->Y': jnp.array([1.]), 'X->V1': jnp.array([2.]), 'Y->V1': jnp.array([3.])}
 
-    theta0 = {'V1->X': jnp.array([1., 2.]), 'X->Y': jnp.array([3., 4.]), 'V1->Y': jnp.array([5., 6.])}
+    # theta0 = {'V1->X': jnp.array([1., 2.]), 'X->Y': jnp.array([3., 4.]), 'V1->Y': jnp.array([5., 6.])}
     # theta0 = {'X->V1': jnp.array([1., 2.]), 'X->Y': jnp.array([3., 4.]), 'V1->Y': jnp.array([5., 6.])}
     # theta0 = {'X->Y': jnp.array([1., 2.]), 'X->V1': jnp.array([3., 4.]), 'Y->V1': jnp.array([5., 6.])}
     alpha, beta, gamma = np.array(list(theta0.values()))
@@ -443,10 +443,10 @@ if __name__ == '__main__':
     # print('true bias', -gamma * (beta + gamma * alpha) / (1 + gamma ** 2))
 
     from models.linear_confounder_model import define_model
-    cp = CausalProb(model=define_model())
+    cp = CausalProb(model=define_model(dim=1))
     u, v = cp.fill({k: u(1, theta0) for k, u in cp.draw_u.items()}, {}, theta0, cp.draw_u.keys())
     x = v['X'].squeeze(0)
-    o = {'V1': v['V1'].squeeze(0)}
+    o = {}#{'V1': v['V1'].squeeze(0)}
 
     n_samples = 1000000
     print("Causal effect: {}".format(cp.causal_effect(x, o, theta0, n_samples=n_samples)))
@@ -461,7 +461,7 @@ if __name__ == '__main__':
     # for rv in v:
     #     for key in theta0:
     #         print('df[{}]_dtheta[{}]'.format(rv, key), sem.dfv_dtheta(rv, key, u, x, o, theta0))
-    ui = {k: _u[0] if _u.ndim > 1 else _u for k, _u in u.items()}
-    for key in theta0:
-        print(key, 'dllkd_dtheta', cp.dllkd_dtheta(key, ui, x, o, theta0))
-        print()
+    # ui = {k: _u[0] if _u.ndim > 1 else _u for k, _u in u.items()}
+    # for key in theta0:
+    #     print(key, 'dllkd_dtheta', cp.dllkd_dtheta(key, ui, x, o, theta0))
+    #     print()

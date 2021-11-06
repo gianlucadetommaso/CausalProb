@@ -5,7 +5,7 @@ from inference.optimization.adam import adam
 from tools.structures import pack, unpack
 
 import jax.numpy as jnp
-from jax import grad, jvp, vmap, jacfwd
+from jax import grad, jvp, vmap, jacfwd, jit
 
 
 def train(model, x: jnp.array, y: jnp.array, o: jnp.array, theta0: jnp.array, n_samples: int = 1000, n_iter: int = 100,
