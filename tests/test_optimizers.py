@@ -16,5 +16,4 @@ class TestAdam(unittest.TestCase):
 
         x0 = jnp.array(np.random.normal())
         x, losses = adam(loss, grad_loss, x0, n_iter)
-
-        jnp.allclose(x, jnp.array([3.]))
+        assert jnp.allclose(x, jnp.array([3.]), atol=1e-2, rtol=1e-2)
