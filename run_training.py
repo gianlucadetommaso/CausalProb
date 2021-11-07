@@ -7,6 +7,7 @@ from tools.structures import unpack
 import jax.numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 if __name__ == '__main__':
     dim = 1
@@ -24,8 +25,11 @@ if __name__ == '__main__':
     y = v['Y']
 
     theta0 = unpack(jnp.array(np.random.normal(size=3 * dim)), true_theta)
+    start_time = time.time()
+    print('Train model parameters...')
     theta, losses = train(model, x, y, o, theta0, loss_type='neg-avg-log-evidence')
-    print('optimal theta parameters:', theta)
+    print('Training completed in {} seconds.'.format(np.round(time.time() - start_time, 2)))
+    print('optimal theta2 parameters:', theta)
     plt.plot(losses)
     plt.show()
 
@@ -38,5 +42,4 @@ if __name__ == '__main__':
         plt.hist(v[rv].squeeze(1), bins=int(np.sqrt(2 * n_obs)), alpha=0.5, density=True)[-1]
         plt.hist(est_v[rv].squeeze(1), bins=int(np.sqrt(2 * n_samples)), alpha=0.5, density=True)[-1]
         plt.legend(['true distribution', 'estimated distribution'], fontsize=12)
-
     plt.show()

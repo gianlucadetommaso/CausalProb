@@ -5,17 +5,18 @@ from inference.optimization.adam import adam
 from tools.structures import pack, unpack
 
 import jax.numpy as jnp
-from jax import grad, jvp, vmap, jacfwd, jit
+from jax import vmap, jit
+from jax import random
 
 
 def train(model, x: jnp.array, y: jnp.array, o: jnp.array, theta0: jnp.array, n_samples: int = 1000, n_iter: int = 100,
-          loss_type: str = 'neg-evidence') -> tuple:
+          loss_type: str = 'neg-evidence', step_size: float = 1., print_every: int = 1) -> tuple:
     """
     It trains the parameters of the model, given data `x`, `y`, `o`. Starting from an initial solution `theta0`, the
     algorithm uses the Adam optimizer to minimize with respect to the negative evidence (default) or the negative
     averaged log-likelihood.
-    Currently, the number of observations for each observed variable must be the same. 
-    
+    Currently, the number of observations for each observed variable must be the same.
+
     Parameters
     ----------
     x: jnp.array
@@ -34,6 +35,10 @@ def train(model, x: jnp.array, y: jnp.array, o: jnp.array, theta0: jnp.array, n_
         Type of loss function. It can either be:
             - `neg-evidence`: the evidence density function, namely -p(x,y,o);
             - `neg-avg-log-evidence`: the average logarithmic-evidence, namely -E_{u_L}[p(x,y,o|u_L)]
+    step_size: float
+        Initial step size in Adam optimizer.
+    print_every: int
+        After how many iterations to print current status of the optimization.
 
     Returns
     -------
@@ -57,17 +62,18 @@ def train(model, x: jnp.array, y: jnp.array, o: jnp.array, theta0: jnp.array, n_
 
     cp = CausalProb(model=model)
 
-    def loss(_theta: jnp.array):
-        unpacked_theta = unpack(_theta, theta0)
-        u_prior = {k: u(n_samples, unpacked_theta) for k, u in cp.draw_u.items()}
+    # loss function
+    def loss(_theta: dict):
+        u_prior = {k: u(n_samples, _theta) for k, u in cp.draw_u.items()}
 
         def _loss(xj, oyj):
-            u, v = cp.fill(u_prior, {**oyj, 'X': xj}, unpacked_theta, cp.draw_u.keys())
+            u, v = cp.fill(u_prior, {**oyj, 'X': xj}, _theta, cp.draw_u.keys())
 
             def __loss(i: int):
                 ui = {k: _u[i] if _u.ndim > 1 else _u for k, _u in u.items()}
                 vi = {k: _v[i] if _v.ndim > 1 else _v for k, _v in v.items()}
-                return cp.llkd(ui, xj, oyj, unpacked_theta, vi)
+                llkd = cp.llkd(ui, xj, oyj, _theta, vi)
+                return jnp.exp(llkd) if loss_type == 'neg-evidence' else llkd
 
             return -jnp.mean(jnp.vectorize(__loss)(range(n_samples)))
 
@@ -75,40 +81,64 @@ def train(model, x: jnp.array, y: jnp.array, o: jnp.array, theta0: jnp.array, n_
             return jnp.sum(vmap(_loss, (0, {k: 0 for k in oy}))(x, oy))
         return _loss(x, oy)
 
+    # gradient of loss function
     def dloss_dtheta(_theta: jnp.array):
-        unpacked_theta = unpack(_theta, theta0)
-        u_prior = {k: u(n_samples, unpacked_theta) for k, u in cp.draw_u.items()}
+        u_prior = {k: u(n_samples, _theta) for k, u in cp.draw_u.items()}
 
         def _dloss_dtheta(xj, oyj):
-            u, v = cp.fill(u_prior, {**oyj, 'X': xj}, unpacked_theta, cp.draw_u.keys())
+            u, v = cp.fill(u_prior, {**oyj, 'X': xj}, _theta, cp.draw_u.keys())
 
             def __dloss_dtheta(i: int):
                 ui = {k: _u[i] if _u.ndim > 1 else _u for k, _u in u.items()}
 
                 # prior gradient
-                dlpu_dtheta = 0
+                dlpu_dtheta = {key: 0. for key in _theta}
                 for rv in ui:
                     if rv != 'X' and rv not in oyj:
-                        dlpu_dtheta += pack({key: cp.dlpu_dtheta(rv, key, ui, _theta) for key in _theta})
+                        dlpu_dtheta = {key: dlpu_dtheta[key] + cp.dlpu_dtheta(rv, key, ui, _theta) for key in _theta}
 
                 # likelihood gradient
-                dllkd_dtheta = pack({key: cp.dllkd_dtheta(key, ui, xj, oyj, unpacked_theta) for key in unpacked_theta})
+                dllkd_dtheta = {key: cp.dllkd_dtheta(key, ui, xj, oyj, _theta) for key in _theta}
 
                 # REINFORCE estimator (if prior does not depend on parameters, this is standard gradient direction)
                 if loss_type == 'neg-evidence':
-                    lkd = jnp.exp(cp.llkd(ui, xj, oyj, unpacked_theta))
-                    return (dlpu_dtheta + dllkd_dtheta) * lkd
+                    lkd = jnp.exp(cp.llkd(ui, xj, oyj, _theta))
+                    return {key: (dlpu_dtheta[key] + dllkd_dtheta[key]) * lkd for key in _theta}
                 else:
-                    llkd = cp.llkd(ui, xj, oyj, unpacked_theta)
-                    return dlpu_dtheta * llkd + dllkd_dtheta
+                    llkd = cp.llkd(ui, xj, oyj, _theta)
+                    return {key: dlpu_dtheta[key] * llkd + dllkd_dtheta[key] for key in _theta}
 
-            return -jnp.mean(jnp.vectorize(__dloss_dtheta, signature='()->(ntheta)')(range(n_samples)), 0)
+            return {key: -jnp.mean(g, 0) for key, g in jnp.vectorize(__dloss_dtheta)(range(n_samples)).items()}
 
         if x.ndim > 1:
-            return jnp.sum(vmap(_dloss_dtheta, (0, {k: 0 for k in oy}))(x, oy), 0)
+            return {key: jnp.sum(g, 0) for key, g in vmap(_dloss_dtheta, (0, {k: 0 for k in oy}))(x, oy).items()}
         return _dloss_dtheta(x, oy)
 
-    theta, losses = adam(loss, dloss_dtheta, pack(theta0), n_iter=n_iter)
-    return unpack(theta, theta0), losses
+    # run optimization
+    from jax.experimental import optimizers
+    opt_init, opt_update, get_params = optimizers.adam(step_size=step_size)
 
+    losses = []
+
+    strf = "{:<10} {:<25}"
+    print(strf.format("iter", "loss"))
+    print(40 * '-')
+
+    @jit
+    def step(i, opt_state):
+        params = get_params(opt_state)
+
+        _loss = loss(params)
+        g = dloss_dtheta(params)
+        return opt_update(i, g, opt_state), _loss
+
+    opt_state = opt_init(theta0)
+    for i in range(n_iter):
+        opt_state, _loss = step(i, opt_state)
+        losses.append(_loss)
+
+        if i % print_every == 0:
+            print(strf.format(i, _loss))
+
+    return get_params(opt_state), losses
 

@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib import animation
 
 
-def train(loss, X: np.array, params0: jnp.array, step_size: float = 1e-4, n_iters: int = 10000, batch_size: int = 100) -> list:
+def train(loss, X: np.array, params0: jnp.array, step_size: float = 1e-4, n_iter: int = 10000, batch_size: int = 100) -> list:
     """
     Train model to data `X` using Adam optimizer on input `loss`, starting from initial parameters `params0`. It returns
     the optimal parameters.
@@ -34,7 +34,7 @@ def train(loss, X: np.array, params0: jnp.array, step_size: float = 1e-4, n_iter
         Initial solution of model parameters.
     step_size: float
         Initial step size of the optimization algorithm.
-    n_iters: int
+    n_iter: int
         Number of interations of the optimization.
     batch_size: int
         Batch size at every iteration.
@@ -52,10 +52,10 @@ def train(loss, X: np.array, params0: jnp.array, step_size: float = 1e-4, n_iter
         g = grad(loss)(params, batch)
         return opt_update(i, g, opt_state)
 
-    data_generator = (X[np.random.choice(X.shape[0], batch_size)] for _ in range(n_iters))
+    data_generator = (X[np.random.choice(X.shape[0], batch_size)] for _ in range(n_iter))
 
     opt_state = opt_init(params0)
-    for i in range(n_iters):
+    for i in range(n_iter):
         opt_state = step(i, next(data_generator), opt_state)
 
     return get_params(opt_state)

@@ -3,7 +3,8 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 
 
-def adam(loss, grad_loss, theta0: jnp.array, n_iter: int = 10000, alpha: float = 1, beta1: float = 0.9, beta2: float = 0.999):
+def adam(loss, grad_loss, theta0: jnp.array, n_iter: int = 10000, alpha: float = 1, beta1: float = 0.9, beta2: float = 0.999,
+         print_status: bool = True):
     """
     Adam minimizer. It minimizes a `loss` function starting from the initial solution `theta0`. The
     gradient of the loss function with respect to the variable to optimize is given as a function `grad_loss`.
@@ -25,6 +26,8 @@ def adam(loss, grad_loss, theta0: jnp.array, n_iter: int = 10000, alpha: float =
         First-order momentum parameter.
     beta2: float
         Second-order momentum parameter.
+    print_status: bool
+        Print current status during the optimization.
 
     Returns
     -------
@@ -44,10 +47,11 @@ def adam(loss, grad_loss, theta0: jnp.array, n_iter: int = 10000, alpha: float =
     losses = [_loss]
 
     # printing output
-    strf = "{:<10} {:<25} {:<25}"
-    print(strf.format("iter", "loss", "||grad(loss)||"))
-    print(60 * '-')
-    print(strf.format(0, _loss, jnp.linalg.norm(d)))
+    if print_status:
+        strf = "{:<10} {:<25} {:<25}"
+        print(strf.format("iter", "loss", "||grad(loss)||"))
+        print(60 * '-')
+        print(strf.format(0, _loss, jnp.linalg.norm(d)))
 
     for t in range(1, n_iter):
         # update ADAM parameters
@@ -66,6 +70,7 @@ def adam(loss, grad_loss, theta0: jnp.array, n_iter: int = 10000, alpha: float =
         d = -grad_loss(theta)
 
         # print loss
-        print(strf.format(t, _loss, jnp.linalg.norm(d)))
+        if print_status:
+            print(strf.format(t, _loss, jnp.linalg.norm(d)))
 
     return theta, losses
