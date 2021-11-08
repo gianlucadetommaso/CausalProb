@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 from jax import random
 from jax.experimental import stax  # neural network library
-from jax.experimental.stax import Dense, Relu  # neural network layers
+from jax.experimental.stax import Dense, Relu, normal  # neural network layers
 
 
 class RealNVP:
@@ -24,7 +24,7 @@ class RealNVP:
         """
         self.dim = dim
         self.n_layers = n_layers
-        self.net_init, self.net_apply = stax.serial(Dense(8), Relu, Dense(8), Relu, Dense(self.dim))
+        self.net_init, self.net_apply = stax.serial(Dense(8, W_init=normal()), Relu, Dense(8, W_init=normal()), Relu, Dense(self.dim, W_init=normal()))
         self.seed = seed
 
     # neural network function

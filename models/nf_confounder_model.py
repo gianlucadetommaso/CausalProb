@@ -5,7 +5,7 @@ from models.normalizing_flow.architectures import RealNVP
 import jax.numpy as jnp
 from jax.config import config
 from jax.experimental import stax  # neural network library
-from jax.experimental.stax import Dense, Relu  # neural network layers
+from jax.experimental.stax import Dense, Relu, normal  # neural network layers
 from jax import random
 config.update("jax_enable_x64", True)
 
@@ -13,7 +13,7 @@ config.update("jax_enable_x64", True)
 class NeuralNet:
     def __init__(self, dim: int, seed: int = 0):
         self.dim = dim
-        self.net_init, self.net_apply = stax.serial(Dense(8), Relu, Dense(8), Relu, Dense(self.dim))
+        self.net_init, self.net_apply = stax.serial(Dense(8, W_init=normal()), Relu, Dense(8, W_init=normal()), Relu, Dense(self.dim, W_init=normal()))
         self.seed = seed
 
     def shift_and_log_scale_fn(self, u: jnp.array, params: jnp.array) -> list:
