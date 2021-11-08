@@ -22,11 +22,8 @@ class TestCausalEstimates(unittest.TestCase):
         dims = [1, 2, 10]
         for dim in dims:
             with self.subTest(dim=dim):
-                theta = {'V1->X': jnp.array(np.random.normal(size=dim)),
-                         'X->Y': jnp.array(np.random.normal(size=dim)),
-                         'V1->Y': jnp.array(np.random.normal(size=dim))}
-
                 cp = CausalProb(model=define_model(dim=dim))
+                theta = {k: cp.init_params[k]() for k in cp.init_params}
                 u, v = cp.fill({k: u(1, theta) for k, u in cp.draw_u.items()}, {}, theta, cp.draw_u.keys())
                 x = v['X'].squeeze(0)
                 o = {}
@@ -43,11 +40,8 @@ class TestCausalEstimates(unittest.TestCase):
         dims = [1, 2, 10]
         for dim in dims:
             with self.subTest(dim=dim):
-                theta = {'X->V1': jnp.array(np.random.normal(size=dim)),
-                         'X->Y': jnp.array(np.random.normal(size=dim)),
-                         'V1->Y': jnp.array(np.random.normal(size=dim))}
-
                 cp = CausalProb(model=define_model(dim=dim))
+                theta = {k: cp.init_params[k]() for k in cp.init_params}
                 u, v = cp.fill({k: u(1, theta) for k, u in cp.draw_u.items()}, {}, theta, cp.draw_u.keys())
                 x = v['X'].squeeze(0)
                 o = {'V1': v['V1'].squeeze(0)}
@@ -64,11 +58,8 @@ class TestCausalEstimates(unittest.TestCase):
         dims = [1, 2, 10]
         for dim in dims:
             with self.subTest(dim=dim):
-                theta = {'X->Y': jnp.array(np.random.normal(size=dim)),
-                         'X->V1': jnp.array(np.random.normal(size=dim)),
-                         'Y->V1': jnp.array(np.random.normal(size=dim))}
-
                 cp = CausalProb(model=define_model(dim=dim))
+                theta = {k: cp.init_params[k]() for k in cp.init_params}
                 u, v = cp.fill({k: u(1, theta) for k, u in cp.draw_u.items()}, {}, theta, cp.draw_u.keys())
                 x = v['X'].squeeze(0)
                 o = {'V1': v['V1'].squeeze(0)}

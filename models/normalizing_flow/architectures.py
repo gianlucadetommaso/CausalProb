@@ -24,7 +24,7 @@ class RealNVP:
         """
         self.dim = dim
         self.n_layers = n_layers
-        self.net_init, self.net_apply = stax.serial(Dense(512), Relu, Dense(512), Relu, Dense(self.dim))
+        self.net_init, self.net_apply = stax.serial(Dense(8), Relu, Dense(8), Relu, Dense(self.dim))
         self.seed = seed
 
     # neural network function
@@ -45,7 +45,7 @@ class RealNVP:
             Shift and log-scale of the affine couple block.
         """
         s = self.net_apply(layer_params, u1)
-        return jnp.split(s, 2, axis=1)
+        return jnp.split(s, 2, axis=-1)
 
     # layer forward and backward mechanisms
     def forward_layer(self, u: jnp.array, layer_params: jnp.array, flip: bool = False) -> jnp.array:
@@ -67,7 +67,7 @@ class RealNVP:
             Output of the forward transformation layer.
         """
         mid = u.shape[-1] // 2
-        u1, u2 = u[:, :mid], u[:, mid:]
+        u1, u2 = (u[:, :mid], u[:, mid:]) if u.ndim == 2 else (u[:mid], u[mid:])
         if flip:
             u2, u1 = u1, u2
         shift, log_scale = self.shift_and_log_scale_fn(u1, layer_params)
@@ -99,7 +99,8 @@ class RealNVP:
             log_scale: log-determinant of the Jacobian of the backward transformation layer.
         """
         mid = v.shape[-1] // 2
-        v1, v2 = v[:, :mid], v[:, mid:]
+        v1, v2 = (v[:, :mid], v[:, mid:]) if v.ndim == 2 else (v[:mid], v[mid:])
+
         if flip:
             v1, v2 = v2, v1
         shift, log_scale = self.shift_and_log_scale_fn(v1, layer_params)

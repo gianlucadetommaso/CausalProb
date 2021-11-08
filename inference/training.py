@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 
 from causalprob import CausalProb
-from inference.optimization.adam import adam
-from tools.structures import pack, unpack
 
 import jax.numpy as jnp
-from jax import vmap, jit
-from jax import random
+from jax import vmap, jit, grad
 
 
 def train(model, x: jnp.array, y: jnp.array, o: jnp.array, theta0: jnp.array, n_samples: int = 1000, n_iter: int = 100,
-          loss_type: str = 'neg-evidence', step_size: float = 1., print_every: int = 1) -> tuple:
+          loss_type: str = 'neg-evidence', step_size: float = 1e-4, print_every: int = 1) -> tuple:
     """
     It trains the parameters of the model, given data `x`, `y`, `o`. Starting from an initial solution `theta0`, the
     algorithm uses the Adam optimizer to minimize with respect to the negative evidence (default) or the negative
@@ -50,7 +47,7 @@ def train(model, x: jnp.array, y: jnp.array, o: jnp.array, theta0: jnp.array, n_
     """
     allowed_losses = ['neg-evidence', 'neg-avg-log-evidence']
     if loss_type not in allowed_losses:
-        raise Exception('`loss_type={} not recognized. Please select within {}.'.format(loss_type, allowed_losses))
+        raise Exception('loss_type={} not recognized. Please select within {}.'.format(loss_type, allowed_losses))
 
     oy = {**o, 'Y': y}
     all_n_obs = set()
@@ -74,7 +71,6 @@ def train(model, x: jnp.array, y: jnp.array, o: jnp.array, theta0: jnp.array, n_
                 vi = {k: _v[i] if _v.ndim > 1 else _v for k, _v in v.items()}
                 llkd = cp.llkd(ui, xj, oyj, _theta, vi)
                 return jnp.exp(llkd) if loss_type == 'neg-evidence' else llkd
-
             return -jnp.mean(jnp.vectorize(__loss)(range(n_samples)))
 
         if x.ndim > 1:
@@ -129,7 +125,8 @@ def train(model, x: jnp.array, y: jnp.array, o: jnp.array, theta0: jnp.array, n_
         params = get_params(opt_state)
 
         _loss = loss(params)
-        g = dloss_dtheta(params)
+        # g = dloss_dtheta(params)
+        g = grad(loss)(params)
         return opt_update(i, g, opt_state), _loss
 
     opt_state = opt_init(theta0)

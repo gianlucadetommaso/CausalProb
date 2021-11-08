@@ -14,7 +14,11 @@ class CausalProb:
     effect and marginal causal bias.
     """
     def __init__(self, model):
-        self.f, self.finv, self.lpu, self.draw_u = model
+        self.f = model['f']
+        self.finv = model['finv']
+        self.lpu = model['lpu']
+        self.draw_u = model['draw_u']
+        self.init_params = model.get('init_params', None)
 
     def fill(self, u: dict, v: dict, theta: dict, rvs: list) -> tuple:
         """
@@ -430,7 +434,12 @@ class CausalProb:
 
 
 if __name__ == '__main__':
-    theta0 = {'V1->X': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
+    from models.linear_confounder_model import define_model
+    dim = 1
+    cp = CausalProb(model=define_model(dim=dim))
+    theta0 = {k: cp.init_params[k]() for i, k in enumerate(cp.init_params)}
+
+    # theta0 = {'V1->X': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
     # theta0 = {'X->V1': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
     # theta0 = {'X->Y': jnp.array([1.]), 'X->V1': jnp.array([2.]), 'Y->V1': jnp.array([3.])}
 
@@ -442,8 +451,6 @@ if __name__ == '__main__':
     # print('true bias', -gamma * alpha)
     # print('true bias', -gamma * (beta + gamma * alpha) / (1 + gamma ** 2))
 
-    from models.linear_confounder_model import define_model
-    cp = CausalProb(model=define_model(dim=1))
     u, v = cp.fill({k: u(1, theta0) for k, u in cp.draw_u.items()}, {}, theta0, cp.draw_u.keys())
     x = v['X'].squeeze(0)
     o = {}#{'V1': v['V1'].squeeze(0)}
