@@ -162,7 +162,7 @@ class RealNVP:
             u, log_scale = self.backward_layer(u, all_params[l], flip)
             tot_log_scale += log_scale
             flip = not flip
-        return u, tot_log_scale
+        return u, -jnp.sum(tot_log_scale, -1)
 
     # sampling
     def sample_base(self, n_samples: int, seed: int = 0) -> jnp.array:

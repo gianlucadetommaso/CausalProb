@@ -12,7 +12,7 @@ def lp_standard_normal(x: jnp.array, theta: dict):
 
 
 def define_model(dim=2):
-    f, finv, lpu, draw_u, init_params = dict(), dict(), dict(), dict(), dict()
+    f, finv, lpu, draw_u, init_params, ldij = dict(), dict(), dict(), dict(), dict(), dict()
 
     # X
     def _f(u: jnp.array, theta: dict, parents: dict):
@@ -25,6 +25,7 @@ def define_model(dim=2):
 
     lpu['X'] = lambda u, theta: lp_standard_normal(u, theta)
     draw_u['X'] = lambda size, theta: jnp.array(np.random.normal(size=(size, dim)))
+    ldij['V1'] = lambda v, theta, parents: 0.
 
     # Y
     def _f(u: jnp.array, theta: dict, parents: dict):
@@ -40,6 +41,7 @@ def define_model(dim=2):
     lpu['Y'] = lambda u, theta: lp_standard_normal(u, theta)
     draw_u['Y'] = lambda size, theta: jnp.array(np.random.normal(size=(size, dim)))
     init_params['X->Y'] = lambda: jnp.array(np.random.normal(size=dim))
+    ldij['X'] = lambda v, theta, parents: 0.
 
     # V1
     def _f(u: jnp.array, theta: dict, parents: dict):
@@ -56,6 +58,7 @@ def define_model(dim=2):
 
     lpu['V1'] = lambda u, theta: lp_standard_normal(u, theta)
     draw_u['V1'] = lambda size, theta: jnp.array(np.random.normal(size=(size, dim)))
+    ldij['Y'] = lambda v, theta, parents: 0.
     init_params['X->V1'] = lambda: jnp.array(np.random.normal(size=dim))
     init_params['Y->V1'] = lambda: jnp.array(np.random.normal(size=dim))
 

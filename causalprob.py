@@ -19,6 +19,7 @@ class CausalProb:
         self.lpu = model['lpu']
         self.draw_u = model['draw_u']
         self.init_params = model.get('init_params', None)
+        self.ldij = model.get('ldij', None)
 
     def fill(self, u: dict, v: dict, theta: dict, rvs: list) -> tuple:
         """
@@ -113,7 +114,9 @@ class CausalProb:
             It returns the gradient of the log-probability density of U_{`rv`} with respect to U_{`rv`} evaluated at the
             values in `u`.
         """
-        return vmap(lambda _u: grad(self.lpu[rv])(_u, theta))(u[rv])
+        if u[rv].ndim > 1:
+            return vmap(lambda _u: grad(self.lpu[rv])(_u, theta))(u[rv])
+        return grad(self.lpu[rv])(u[rv], theta)
 
     def dlpu_dtheta(self, rv, key, u: dict, theta: dict) -> jnp.array:
         """
@@ -279,7 +282,11 @@ class CausalProb:
                 _u, _v = self.fill(_u, {'X': xj, **oj}, theta, list(u.keys()))
 
             def _lp(rv):
-                return self.lpu[rv](_u[rv], theta) + jnp.log(jnp.abs(jnp.linalg.det(self.dfinvv_dv(rv, _v, theta))))
+                if self.ldij is None:
+                    ldij = jnp.log(jnp.abs(jnp.linalg.det(self.dfinvv_dv(rv, _v, theta))))
+                else:
+                    ldij = self.ldij[rv](_v[rv], theta, _v)
+                return self.lpu[rv](_u[rv], theta) + ldij
 
             llkd = _lp('X')
             for rv in oj:
@@ -329,7 +336,7 @@ class CausalProb:
         ----------
         x: jnp.array
             Observation of treatment X.
-        o: dictself.lpu[rv](u[rv], theta)
+        o: dict
             Values of observed random variables O.
         theta: dict
             Model parameters.
