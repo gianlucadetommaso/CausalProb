@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-
-import numpy as np
 import jax.numpy as jnp
 import jax.scipy as jsp
 from jax import grad, jvp, vmap, jacfwd
@@ -20,6 +17,9 @@ class CausalProb:
         self.draw_u = model['draw_u']
         self.init_params = model.get('init_params', None)
         self.ldij = model.get('ldij', None)
+        self._dlpu_du = model.get('dlpu_du', None)
+        self._dlpu_dtheta = model.get('dlpu_dtheta', None)
+        self._dfy_du = model.get('dfy_du', None)
 
     def fill(self, u: dict, v: dict, theta: dict, rvs: list) -> tuple:
         """
@@ -114,6 +114,9 @@ class CausalProb:
             It returns the gradient of the log-probability density of U_{`rv`} with respect to U_{`rv`} evaluated at the
             values in `u`.
         """
+        if self._dlpu_du is not None and hasattr(self._dlpu_du, rv):
+            return self._dlpu_du[rv](u, theta)
+
         if u[rv].ndim > 1:
             return vmap(lambda _u: grad(self.lpu[rv])(_u, theta))(u[rv])
         return grad(self.lpu[rv])(u[rv], theta)
@@ -163,6 +166,9 @@ class CausalProb:
             It returns the Jacobian of the structural equation f_Y with respect to U_{`rv`} evaluated at the values in
             `u`, when only the value `x` of the treatment X is observed but no other variable.
         """
+        if self._dfy_du is not None and hasattr(self._dfy_du, rv):
+            return self._dfy_du[rv](u, x, theta)
+
         uo = {k: _u for k, _u in u.items() if _u.ndim == 1}
         ul = {k: _u for k, _u in u.items() if _u.ndim > 1}
 
@@ -419,63 +425,18 @@ class CausalProb:
             y = self.fy(u, xj, theta)
             ru = y - jnp.sum(y * w[:, None], 0, keepdims=True)
 
-            def __causal_bias(i: int):
-                ui = {k: _u[i] if _u.ndim > 1 else _u for k, _u in u.items()}
-                vi = {k: _v[i] if _v.ndim > 1 else _v for k, _v in v.items()}
+            def cb(rv):
+                dfy_du = self.dfy_du(rv, u, xj, theta)
+                dlpu_du = self.dlpu_du(rv, u, theta)[:, None, :] if u[rv].ndim > 1 else self.dlpu_du(rv, u, theta)[None, None, :]
+                dfinvv_dv = self.dfinvv_dv(rv, v, theta)
+                return jnp.matmul(dfy_du + ru[:, :, None] * dlpu_du, dfinvv_dv)
 
-                def cb(rv):
-                    dfy_du = self.dfy_du(rv, ui, xj, theta)
-                    dlpu_du = self.dlpu_du(rv, ui, theta)[:, None, :] if ui[rv].ndim > 1 else self.dlpu_du(rv, ui, theta)[None, None, :]
-                    dfinvv_dv = self.dfinvv_dv(rv, vi, theta)
-                    return jnp.matmul(dfy_du + ru[i, :, None] * dlpu_du, dfinvv_dv)
+            b = cb('X')
+            for rv in oj:
+                b -= jnp.matmul(cb(rv), self.dfv_dx(rv, u, xj, oj, theta))
 
-                b = cb('X')
-                for rv in oj:
-                    b -= jnp.matmul(cb(rv), self.dfv_dx(rv, ui, xj, oj, theta))
-                return b * w[i, None, None]
-            return jnp.sum(jnp.vectorize(__causal_bias, signature='(s)->(s,ny,nx)')(range(n_samples)), 0)
+            return jnp.sum(b * w[:, None, None], 0)
 
         if x.ndim > 1:
             return vmap(_causal_bias, (0, {k: 0 for k in o}))(x, o)
         return _causal_bias(x, o)
-
-
-if __name__ == '__main__':
-    from models.linear_confounder_model import define_model
-    dim = 1
-    cp = CausalProb(model=define_model(dim=dim))
-    theta0 = {k: cp.init_params[k]() for i, k in enumerate(cp.init_params)}
-
-    # theta0 = {'V1->X': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
-    # theta0 = {'X->V1': jnp.array([1.]), 'X->Y': jnp.array([2.]), 'V1->Y': jnp.array([3.])}
-    # theta0 = {'X->Y': jnp.array([1.]), 'X->V1': jnp.array([2.]), 'Y->V1': jnp.array([3.])}
-
-    # theta0 = {'V1->X': jnp.array([1., 2.]), 'X->Y': jnp.array([3., 4.]), 'V1->Y': jnp.array([5., 6.])}
-    # theta0 = {'X->V1': jnp.array([1., 2.]), 'X->Y': jnp.array([3., 4.]), 'V1->Y': jnp.array([5., 6.])}
-    # theta0 = {'X->Y': jnp.array([1., 2.]), 'X->V1': jnp.array([3., 4.]), 'Y->V1': jnp.array([5., 6.])}
-    alpha, beta, gamma = np.array(list(theta0.values()))
-    print('true bias', gamma * alpha / (1 + alpha ** 2))
-    # print('true bias', -gamma * alpha)
-    # print('true bias', -gamma * (beta + gamma * alpha) / (1 + gamma ** 2))
-
-    u, v = cp.fill({k: u(1, theta0) for k, u in cp.draw_u.items()}, {}, theta0, cp.draw_u.keys())
-    x = v['X'].squeeze(0)
-    o = {}#{'V1': v['V1'].squeeze(0)}
-
-    n_samples = 1000000
-    print("Causal effect: {}".format(cp.causal_effect(x, o, theta0, n_samples=n_samples)))
-    print("Causal bias: {}".format(cp.causal_bias(x, o, theta0, n_samples=n_samples)))
-    #
-
-    # check derivatives wrt theta
-    # print('x', x)
-    # print('o', o)
-    #
-    # u, v = sem.fill({k: u(3) for k, u in sem.draw_u.items()}, {}, theta0, sem.draw_u.keys())
-    # for rv in v:
-    #     for key in theta0:
-    #         print('df[{}]_dtheta[{}]'.format(rv, key), sem.dfv_dtheta(rv, key, u, x, o, theta0))
-    # ui = {k: _u[0] if _u.ndim > 1 else _u for k, _u in u.items()}
-    # for key in theta0:
-    #     print(key, 'dllkd_dtheta', cp.dllkd_dtheta(key, ui, x, o, theta0))
-    #     print()

@@ -32,7 +32,7 @@ class NeuralNet:
 
 
 def define_model(dim=2):
-    f, finv, lpu, draw_u, init_params, ldij = dict(), dict(), dict(), dict(), dict(), dict()
+    f, finv, lpu, draw_u, init_params, ldij, dlpu_du, dfy_du = dict(), dict(), dict(), dict(), dict(), dict(), dict(), dict()
 
     nf = RealNVP(dim=dim, seed=42)
     nn = NeuralNet(input_dim=dim, output_dim=2 * dim, seed=43)
@@ -54,6 +54,7 @@ def define_model(dim=2):
     lpu['V1'] = lambda u, theta: nf.evaluate_base_logpdf(u)
     draw_u['V1'] = lambda size, theta, seed=0: nf.sample_base(size, seed=seed)
     init_params['V1'] = lambda seed: nf.init_all_params(seed)
+    dlpu_du['V1'] = lambda u, theta: -u
 
     # X
     def _f_X(u: jnp.array, theta: dict, parents: dict):
@@ -78,6 +79,8 @@ def define_model(dim=2):
     draw_u['X'] = lambda size, theta, seed=0: nf.sample_base(size, seed=seed)
     init_params['V1->X'] = lambda seed: nn.init_params(seed)[1]
     init_params['U_X->X'] = lambda seed: nf.init_all_params(seed)
+    dlpu_du['X'] = lambda u, theta: -u
+    dfy_du['X'] = lambda u, x, theta: 0.
 
     # Y
     def _f_Y(u: jnp.array, theta: dict, parents: dict):
@@ -108,5 +111,7 @@ def define_model(dim=2):
     draw_u['Y'] = lambda size, theta, seed=0: nf.sample_base(size, seed=seed)
     init_params['V1--X->Y'] = lambda seed: nn2.init_params(seed)[1]
     init_params['U_Y->Y'] = lambda seed: nf.init_all_params(seed)
+    dlpu_du['Y'] = lambda u, theta: -u
 
-    return dict(f=f, finv=finv, lpu=lpu, draw_u=draw_u, init_params=init_params, ldij=ldij)
+    return dict(f=f, finv=finv, lpu=lpu, draw_u=draw_u, init_params=init_params, ldij=ldij, dlpu_du=dlpu_du,
+                dfy_du=dfy_du)
