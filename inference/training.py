@@ -248,10 +248,12 @@ def train(model, x_train: jnp.array, y_train: jnp.array, o_train: dict, x_pred: 
             return jnp.mean(jnp.abs(cp.causal_bias(x_pred, o_pred, theta, n_samples=n_samples)))
         if reg_loss == 'l2-bias':
             return jnp.mean(cp.causal_bias(x_pred, o_pred, theta, n_samples=n_samples) ** 2)
-        if reg_loss == 'l1':
-            return jnp.mean(jnp.abs(jnp.array(tree_flatten(theta)[0])))
-        if reg_loss == 'l2':
-            return jnp.mean(jnp.array(tree_flatten(theta)[0]) ** 2)
+        if reg_loss in ['l1', 'l2']:
+            flat_theta = jnp.concatenate([_theta.flatten() for _theta in tree_flatten(theta)[0]])
+            if reg_loss == 'l1':
+                return jnp.mean(jnp.abs(flat_theta))
+            if reg_loss == 'l2':
+                return jnp.mean(flat_theta ** 2)
 
     # batching
     n_batches = int(np.ceil(x_train.shape[0] / batch_size))

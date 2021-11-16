@@ -15,7 +15,8 @@ if __name__ == '__main__':
     n_train_obs = 1000
     n_samples = 1000
     n_pred_obs = 10
-    lam = 10
+    lam = 1
+    reg_loss = 'l2'
 
     from models.linear_confounder_model import define_model
     linear_model = define_model(dim=dim)
@@ -32,15 +33,16 @@ if __name__ == '__main__':
     x_pred = v_pred['X']
     o_pred = {}  # {'V1': v_pred['V1']}
 
-    from models.linear_confounder_model import define_model
+    from models.nf_confounder_model import define_model
     est_model = define_model(dim=dim)
     theta0 = {k: est_model['init_params'][k](i) for i, k in enumerate(est_model['init_params'])}
-    # theta0 = {k: th + jnp.array(np.random.normal(scale=1, size=2)) for k, th in true_theta.items()}
+    # theta0 = {k: th + jnp.array(np.random.normal.(scale=1, size=2)) for k, th in true_theta.items()}
 
     print('\nTrain normalizing flow model parameters...')
     start_time = time.time()
-    theta, losses, training_losses, biases = train(est_model, x_train, y_train, o_train, x_pred, o_pred, theta0,
-                                                   lam=lam, step_size=1, n_epoch=100, batch_size=1000)
+    theta, losses, training_losses, reg_losses = train(est_model, x_train, y_train, o_train, x_pred, o_pred, theta0,
+                                                       reg_loss=reg_loss, lam=lam, step_size=1e-1, n_epoch=100,
+                                                       batch_size=1000)
     print("Completed in {:0.2f} seconds.".format(time.time() - start_time))
     print(theta)
     est_cp = CausalProb(model=est_model)
@@ -54,13 +56,13 @@ if __name__ == '__main__':
     plt.plot(training_losses, color='C1')
     plt.legend(['training loss'], fontsize=12, loc='upper right')
     plt.subplot(1, 3, 3)
-    plt.semilogy(biases, color='C2')
-    plt.legend(['bias'], fontsize=12, loc='upper right')
+    plt.semilogy(reg_losses, color='C2')
+    plt.legend([reg_loss], fontsize=12, loc='upper right')
     plt.show()
 
     plt.figure(figsize=(10, 6))
     for i, rv, in enumerate(u_train):
-        plt.suptitle("recover linear model observations via NF model")
+        plt.suptitle("recover linear model observations")
         plt.subplot(3, 2, 2 * i + 1)
         plt.title(rv, fontsize=15)
         plt.scatter(v_train[rv][:, 0], v_train[rv][:, 1], s=1, color='blue')
