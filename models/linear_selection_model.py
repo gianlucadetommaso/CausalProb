@@ -2,6 +2,7 @@
 
 import numpy as np
 import jax.numpy as jnp
+from jax import random
 from jax.config import config
 config.update("jax_enable_x64", True)
 
@@ -40,7 +41,7 @@ def define_model(dim=2):
 
     lpu['Y'] = lambda u, theta: lp_standard_normal(u, theta)
     draw_u['Y'] = lambda size, theta: jnp.array(np.random.normal(size=(size, dim)))
-    init_params['X->Y'] = lambda: jnp.array(np.random.normal(size=dim))
+    init_params['X->Y'] = lambda seed=0, scale=1: scale * random.normal(random.PRNGKey(seed), (dim,))
     ldij['X'] = lambda v, theta, parents: 0.
 
     # V1
@@ -59,7 +60,7 @@ def define_model(dim=2):
     lpu['V1'] = lambda u, theta: lp_standard_normal(u, theta)
     draw_u['V1'] = lambda size, theta: jnp.array(np.random.normal(size=(size, dim)))
     ldij['Y'] = lambda v, theta, parents: 0.
-    init_params['X->V1'] = lambda: jnp.array(np.random.normal(size=dim))
-    init_params['Y->V1'] = lambda: jnp.array(np.random.normal(size=dim))
+    init_params['X->V1'] = lambda seed=0, scale=1: scale * random.normal(random.PRNGKey(seed), (dim,))
+    init_params['Y->V1'] = lambda seed=0, scale=1: scale * random.normal(random.PRNGKey(seed), (dim,))
 
     return dict(f=f, finv=finv, lpu=lpu, draw_u=draw_u, init_params=init_params)
