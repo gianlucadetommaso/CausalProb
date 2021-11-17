@@ -2,7 +2,6 @@
 
 from causalprob import CausalProb
 from inference.training import train
-from tools.structures import sum_trees
 
 import numpy as np
 import jax.numpy as jnp

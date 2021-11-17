@@ -1,8 +1,6 @@
 import jax.numpy as jnp
 import numpy as np
 
-from jax.tree_util import tree_flatten, tree_unflatten
-
 
 def pack(d: dict) -> jnp.array:
     """
@@ -46,9 +44,10 @@ def unpack(a: jnp.array, d: dict) -> dict:
     return {keys[i]: a[cum_sizes[i]:cum_sizes[i+1]].reshape(shapes[i]) for i in range(len(d))}
 
 
-def sum_trees(tree_a, tree_b, lam):
-    leaves_a, treedef_a = tree_flatten(tree_a)
-    leaves_b, treedef_b = tree_flatten(tree_b)
-    assert treedef_a == treedef_b
-    return treedef_a.unflatten(map(lambda a, b: a + lam * b, leaves_a, leaves_b))
+# def sum_trees(tree_a, tree_b, lam):
+#     leaves_a, treedef_a = tree_flatten(tree_a)
+#     leaves_b, treedef_b = tree_flatten(tree_b)
+#     assert treedef_a == treedef_b
+#     return treedef_a.unflatten(map(lambda a, b: a + lam * b, leaves_a, leaves_b))
+
 
