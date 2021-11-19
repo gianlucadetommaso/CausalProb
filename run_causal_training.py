@@ -16,12 +16,12 @@ if __name__ == '__main__':
     n_samples = 1000
     n_pred_obs = 10
     lam = 1
-    reg_loss = 'l2'
+    reg_loss = 'l1-bias'
 
     from models.linear_confounder_model import define_model
     linear_model = define_model(dim=dim)
-    # true_theta = {k: linear_model['init_params'][k]() for k in linear_model['init_params']}
-    true_theta = {'V1->X': jnp.array([3., 4.]), 'X->Y': jnp.array([1., 2.]), 'V1->Y': jnp.array([-2., -3.])}
+    true_theta = {k: linear_model['init_params'][k]() for k in linear_model['init_params']}
+    # true_theta = {'V1->X': jnp.array([3., 4.]), 'X->Y': jnp.array([1., 2.]), 'V1->Y': jnp.array([-2., -3.])}
 
     linear_cp = CausalProb(model=linear_model)
     u_train, v_train = linear_cp.fill({k: u(n_train_obs, true_theta) for k, u in linear_cp.draw_u.items()}, {}, true_theta, linear_cp.draw_u.keys())
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     x_pred = v_pred['X']
     o_pred = {}  # {'V1': v_pred['V1']}
 
-    from models.nf_confounder_model import define_model
+    from models.nf_inout_model import define_model
     est_model = define_model(dim=dim)
     theta0 = {k: est_model['init_params'][k](i) for i, k in enumerate(est_model['init_params'])}
     # theta0 = {k: th + jnp.array(np.random.normal.(scale=1, size=2)) for k, th in true_theta.items()}
@@ -48,7 +48,8 @@ if __name__ == '__main__':
     est_cp = CausalProb(model=est_model)
     _, est_v = est_cp.fill({k: u(n_train_obs, theta) for k, u in est_cp.draw_u.items()}, {}, theta, est_cp.draw_u.keys())
 
-    plt.figure(figsize=(20, 3))
+    plt.figure(figsize=(22, 3))
+    plt.suptitle("lambda = {:.2f}".format(lam), fontsize=12)
     plt.subplot(1, 3, 1)
     plt.plot(losses, color='C0')
     plt.legend(['overall loss'], fontsize=12, loc='upper right')
@@ -69,8 +70,9 @@ if __name__ == '__main__':
         plt.legend(['true samples'], fontsize=12)
         plt.subplot(3, 2, 2 * i + 2)
         plt.title(rv, fontsize=15)
-        plt.scatter(est_v[rv][:, 0], est_v[rv][:, 1], s=1, color='red')
-        plt.legend(['estimated samples'], fontsize=12)
+        if rv in est_v:
+            plt.scatter(est_v[rv][:, 0], est_v[rv][:, 1], s=1, color='red')
+            plt.legend(['estimated samples'], fontsize=12)
     plt.tight_layout()
     plt.show()
 
