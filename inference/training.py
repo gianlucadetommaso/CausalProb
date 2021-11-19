@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 from causalprob import CausalProb
-from tools.structures import sum_trees
 
 import numpy as np
+import jax
 import jax.numpy as jnp
 from jax import vmap, jit, value_and_grad
 from jax.tree_util import tree_flatten
@@ -278,7 +278,7 @@ def train(model, x_train: jnp.array, y_train: jnp.array, o_train: dict, x_pred: 
         training_loss, training_g = value_and_grad(lambda theta: training_loss_fn(theta, x_batch, y_batch, o_batch))(params)
         if lam > 0:
             reg_loss, reg_loss_g = value_and_grad(lambda theta: reg_loss_fn(theta, x_pred, o_pred))(params)
-            g = sum_trees(training_g, reg_loss_g, lam)
+            g = jax.tree_multimap(lambda x,y: x+lam*y, training_g, reg_loss_g)
         else:
             reg_loss = reg_loss_fn(params, x_pred, o_pred)
             g = training_g
