@@ -3,19 +3,21 @@
 from models.normalizing_flow.architectures import RealNVP
 
 from jax.experimental import optimizers
-from jax import jit, grad
+from jax import jit, grad, value_and_grad
 import jax.numpy as jnp
 import numpy as np
 import time
 import os
 
+
 from sklearn import cluster, datasets, mixture
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 from matplotlib import animation
+from tqdm import tqdm
 
 
-def train(loss, X: np.array, params0: jnp.array, step_size: float = 1e-4, n_iter: int = 10000, batch_size: int = 100) -> list:
+def train(loss, X: np.array, params0: jnp.array, step_size: float = 3e-4, n_iter: int = 100 , batch_size: int = 100) -> list:
     """
     Train model to data `X` using Adam optimizer on input `loss`, starting from initial parameters `params0`. It returns
     the optimal parameters.
@@ -49,15 +51,16 @@ def train(loss, X: np.array, params0: jnp.array, step_size: float = 1e-4, n_iter
     @jit
     def step(i, batch, opt_state):
         params = get_params(opt_state)
-        g = grad(loss)(params, batch)
-        return opt_update(i, g, opt_state)
+        l, g = value_and_grad(loss)(params, batch)
+        return l, opt_update(i, g, opt_state)
 
     data_generator = (X[np.random.choice(X.shape[0], batch_size)] for _ in range(n_iter))
 
     opt_state = opt_init(params0)
-    for i in range(n_iter):
-        opt_state = step(i, next(data_generator), opt_state)
-
+    tqdm_iter = tqdm(range(n_iter))
+    for i in tqdm_iter:
+        l, opt_state = step(i, next(data_generator), opt_state)
+        tqdm_iter.set_postfix({"loss": l})
     return get_params(opt_state)
 
 
@@ -73,7 +76,7 @@ if __name__ == '__main__':
     params0 = model.init_all_params()
     start_time = time.time()
     print('Train model parameters...')
-    params = train(loss, X, params0)
+    params = train(loss, X, params0, n_iter=120)
     print('Training completed in {} seconds.'.format(np.round(time.time() - start_time, 2)))
 
     v = model.sample_base(1000)
@@ -87,8 +90,11 @@ if __name__ == '__main__':
     # First set up the figure, the axis, and the plot element we want to animate
     fig, ax = plt.subplots()
 
-    y = values[0]
+    y = values[-1]
+    print(y)
     plt.scatter(X[:, 0], X[:, 1], s=10, color='blue')
+    plt.scatter(y[:, 0], y[:, 1], s=10, color='red')
+    plt.show()
     paths = ax.scatter(y[:, 0], y[:, 1], s=10, color='red')
 
     def animate(i):
@@ -100,9 +106,9 @@ if __name__ == '__main__':
 
     # `brew install imagemagick` if not available
     print('Produce animation...')
-    anim = animation.FuncAnimation(fig, animate, frames=48 * model.n_layers, interval=1, blit=False)
+    #anim = animation.FuncAnimation(fig, animate, frames=48 * model.n_layers, interval=1, blit=False)
 
     animation_name = 'animation.gif'
-    anim.save(animation_name, writer='imagemagick', fps=60)
-    print('Animation saved in {}/{}.'.format(os.getcwd(), animation_name))
+    #anim.save(animation_name, writer='imagemagick', fps=60)
+    #print('Animation saved in {}/{}.'.format(os.getcwd(), animation_name))
 
