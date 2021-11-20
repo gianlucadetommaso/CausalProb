@@ -93,7 +93,7 @@ if __name__ == '__main__':
     prng_key = PRNGKey(0)
     
     
-    flow = NormalizingFlow((RealNVP(mlp(), False), RealNVP(mlp(), True), RealNVP(mlp(), False), RealNVP(mlp(), True),  RealNVP(mlp(), False)))
+    flow = NormalizingFlow((RealNVP(mlp(), False), RealNVP(mlp(), True)))
     flow_dist = NormalizingFlowDist(StandardGaussian(2), flow)
     
     
@@ -102,11 +102,11 @@ if __name__ == '__main__':
 
     start_time = time.time()
     print('Train model parameters...')
-    params = train(loss, X, params, n_iter=100, step_size=1e-4)
+    params = train(loss, X, params, n_iter=5000, step_size=2e-5)
     print('Training completed in {} seconds.'.format(np.round(time.time() - start_time, 2)))
 
     prng_key,_ = jax.random.split(prng_key)
-    y = flow_dist.apply(params, prng_key, 400, method=flow_dist.sample)
+    y = flow_dist.apply(params, prng_key, 2000, method=flow_dist.sample)
     
     
     fig, ax = plt.subplots(2, 1, figsize=(5, 10))
