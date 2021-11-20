@@ -24,7 +24,7 @@ class RealNVP:
         """
         self.dim = dim
         self.n_layers = n_layers
-        self.net_init, self.net_apply = stax.serial(Dense(8, W_init=normal()), Relu, Dense(8, W_init=normal()), Relu, Dense(self.dim, W_init=normal()))
+        self.net_init, self.net_apply = stax.serial(Dense(512), Relu, Dense(512), Relu, Dense(self.dim))
         self.seed = seed
 
     # neural network function
@@ -68,6 +68,7 @@ class RealNVP:
         """
         mid = u.shape[-1] // 2
         u1, u2 = (u[:, :mid], u[:, mid:]) if u.ndim == 2 else (u[:mid], u[mid:])
+
         if flip:
             u2, u1 = u1, u2
         shift, log_scale = self.shift_and_log_scale_fn(u1, layer_params)
@@ -237,8 +238,7 @@ class RealNVP:
         lpv: jnp.array
             Evaluation of the log-probability density function of the push-forward distribution for every input location.
         """
-        u, tot_log_scale = self.backward(v, all_params)
-        ildj = -jnp.sum(tot_log_scale, axis=-1)
+        u, ildj = self.backward(v, all_params)
         return self.evaluate_base_logpdf(u) + ildj
 
     # parameters initialization
