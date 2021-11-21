@@ -2,44 +2,36 @@ import flax
 import jax
 from jax import numpy as jnp
 from flax.linen import Dense, Module
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
+from jax._src.lax.lax import DType
 from jax.random import PRNGKey
 from flax.linen.linear import default_kernel_init, zeros
 from flax.linen.initializers import lecun_normal, zeros
 from flax.linen import compact
 from  jax import lax
+from models.normalizing_flow.nn import Sequential
 
-default_kernel_init = lecun_normal
+default_kernel_init = lecun_normal()
 
 
 class MaskedDense(Module):
-  """A linear transformation applied over the last dimension of the input.
-
-  Attributes:
-    features: the number of output features.
-    use_bias: whether to add a bias to the output (default: True).
-    dtype: the dtype of the computation (default: float32).
-    precision: numerical precision of the computation see `jax.lax.Precision`
-      for details.
-    kernel_init: initializer function for the weight matrix.
-    bias_init: initializer function for the bias.
-  """
   features: int
   mask: jnp.array = 1.0
   use_bias: bool = True
-  dtype = jnp.float32
-  kernel_init =  default_kernel_init
-  bias_init = zeros
-  precision = None
+  dtype: DType = jnp.float32
+  precision: Any = None
+  kernel_init: Callable = default_kernel_init
+  bias_init: Callable = zeros
 
   @compact
-  def __call__(self, x):
+  def __call__(self, inputs):
+    inputs = jnp.asarray(inputs, self.dtype)
     kernel = self.param('kernel',
                         self.kernel_init,
-                        (x.shape[-1], self.features))
+                        (inputs.shape[-1], self.features))
     kernel = jnp.asarray(kernel, self.dtype)
-    y = lax.dot_general(x, kernel*self.mask,
-                        (((x.ndim - 1,), (0,)), ((), ())),
+    y = lax.dot_general(inputs, kernel*self.mask,
+                        (((inputs.ndim - 1,), (0,)), ((), ())),
                         precision=self.precision)
     if self.use_bias:
       bias = self.param('bias', self.bias_init, (self.features,))
@@ -48,13 +40,6 @@ class MaskedDense(Module):
     return y
 
 
-class Sequential(flax.linen.Module):
-  layers: Sequence[flax.linen.Module]
-
-  def __call__(self, x):
-    for layer in self.layers:
-      x = layer(x)
-    return x
 
 
 class MADE(Module):
@@ -74,16 +59,15 @@ class MADE(Module):
 
     def setup(self):
         assert self.output_dim % self.input_dim == 0, "output_dim must be integer multiple of input_dim"
-        
         # define a simple MLP neural net
         masks = self._generate_masks(self.key)
 
         net = []
         hs = [self.input_dim] + list(self.hidden_sizes) + [self.output_dim]
-        for m, h0,h1 in zip(masks, hs, hs[1:]):
+        for m, h1 in zip(masks, hs[1:]):
             net.extend([
-                    MaskedDense(h1, m),
-                    flax.linen.relu,
+                    MaskedDense(h1, mask=m),
+                    jax.nn.relu,
                 ])
         net.pop() # pop the last ReLU for the output layer
         self.net = Sequential(net)
@@ -114,12 +98,16 @@ class MADE(Module):
     def __call__(self, x):
         return self.net(x)
 
-if __name__ == '__main__':
-    key = jax.random.PRNGKey(0)
-    
-    net = MADE(key, 2, 2, [64,64], 1) 
-    net = MaskedDense(64)
-    x = jnp.ones((32,2))
-    params = net.init(key, x)
-    
-    print(net.apply(params, x))
+class ARMLP(Module):
+    """ a 4-layer auto-regressive MLP, wrapper around MADE net """
+    key: PRNGKey
+    output_dim: int
+    hidden_dim:int =  24
+
+    @compact
+    def __call__(self, x):
+        return  MADE(self.key, x.shape[-1], self.output_dim, [self.hidden_dim ,self.hidden_dim, self.hidden_dim] , num_masks=1, natural_ordering=True)(x)
+
+
+
+
