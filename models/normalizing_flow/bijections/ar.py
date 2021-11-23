@@ -5,7 +5,7 @@ from jax import numpy as jnp
 from flax.linen import Module
 import jax
 from models.normalizing_flow.core import NormalizingFlow, NormalizingFlowDist
-from models.normalizing_flow.flow_train import get_test_loop
+from models.normalizing_flow.flow_train import get_test_loop, plot_samples
 class MAF(Module):
     """ Masked Autoregressive Flow that uses a MADE-style network for fast forward """
     key: PRNGKey
@@ -35,7 +35,7 @@ class MAF(Module):
         log_det = jnp.zeros(z.shape[0])
         z = z.flip(dims=(1,)) if self.parity else z
         for i in range(self.dim):
-            st = self.net(x.copy()) # clone to avoid in-place op errors if using IAF
+            st = self.net(x) # clone to avoid in-place op errors if using IAF
             s, t = st.split(self.dim, axis=1)
             x = x.at[:, i].set((z[:, i] - t[:, i]) * jnp.exp(-s[:, i]))
             log_det += -s[:, i]
@@ -65,5 +65,11 @@ if __name__ == '__main__':
     print("Getting train loop...")
     train_loop = get_test_loop(flow_dist)
     print("Training flow...")
-    train_loop(params_flow, flow_dist)
+    params = train_loop(params=params_flow)
+    
+    X = flow_dist.apply(params, key, 1000, method=flow_dist.sample)
+    
+    plot_samples(X)
+    
+    
     
