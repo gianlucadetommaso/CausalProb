@@ -16,6 +16,7 @@ class Sequential(flax.linen.Module):
 
 class MLP(flax.linen.Module):
     hidden: list
+    output_dim: int
     use_bias: bool = True
     activation: Callable = jax.nn.relu
 
@@ -24,6 +25,7 @@ class MLP(flax.linen.Module):
         for h in self.hidden:
             x = Dense(h, use_bias=self.use_bias)(x)
             x = self.activation(x)
+        return Dense(self.output_dim, use_bias=self.use_bias)(x)
 
 if __name__ == '__main__':
     mlp = MLP([64,64])
