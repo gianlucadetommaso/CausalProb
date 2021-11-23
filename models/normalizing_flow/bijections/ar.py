@@ -1,9 +1,11 @@
+from models.normalizing_flow.distributions import StandardGaussian
 from models.normalizing_flow.made import ARMLP
 from jax.random import PRNGKey
 from jax import numpy as jnp
 from flax.linen import Module
 import jax
-
+from models.normalizing_flow.core import NormalizingFlow, NormalizingFlowDist
+from models.normalizing_flow.flow_train import get_test_loop
 class MAF(Module):
     """ Masked Autoregressive Flow that uses a MADE-style network for fast forward """
     key: PRNGKey
@@ -30,12 +32,12 @@ class MAF(Module):
     def backward(self, z):
         # we have to decode the x one at a time, sequentially
         x = jnp.zeros_like(z)
-        log_det = jnp.zeros(z.shape(0))
+        log_det = jnp.zeros(z.shape[0])
         z = z.flip(dims=(1,)) if self.parity else z
         for i in range(self.dim):
             st = self.net(x.copy()) # clone to avoid in-place op errors if using IAF
-            s, t = st.split(self.dim, dim=1)
-            x.at[:, i] = (z[:, i] - t[:, i]) * jnp.exp(-s[:, i])
+            s, t = st.split(self.dim, axis=1)
+            x = x.at[:, i].set((z[:, i] - t[:, i]) * jnp.exp(-s[:, i]))
             log_det += -s[:, i]
         return x, log_det
 
@@ -54,7 +56,14 @@ if __name__ == '__main__':
     x = jnp.ones((32,2))
     params = net.init(key, x)
     key = jax.random.split(key)[0]
-    flow = MAF(key, 2)
-    params_flow = flow.init(key, x)
-
-    print(flow.apply(params_flow, x)[1].shape)
+    flow = NormalizingFlow([MAF(key, 2)])
+    prior = StandardGaussian(2)
+    flow_dist = NormalizingFlowDist(prior, flow)
+    
+    params_flow = flow_dist.init(key, x, method=flow_dist.log_prob)
+    
+    print("Getting train loop...")
+    train_loop = get_test_loop(flow_dist)
+    print("Training flow...")
+    train_loop(params_flow, flow_dist)
+    
