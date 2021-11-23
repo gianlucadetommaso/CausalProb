@@ -25,7 +25,7 @@ class MAF(Module):
         s, t = st.split(self.dim, axis=-1)
         z = x * jnp.exp(s) + t
         # reverse order, so if we stack MAFs correct things happen
-        z = z.flip(dims=(1,)) if self.parity else z
+        z = jnp.flip(z, axis=(1,)) if self.parity else z
         log_det = jnp.sum(s, axis=-1)
         return z, log_det
     
@@ -33,7 +33,7 @@ class MAF(Module):
         # we have to decode the x one at a time, sequentially
         x = jnp.zeros_like(z)
         log_det = jnp.zeros(z.shape[0])
-        z = z.flip(dims=(1,)) if self.parity else z
+        z = jnp.flip(z, axis=(1,)) if self.parity else z
         for i in range(self.dim):
             st = self.net(x) # clone to avoid in-place op errors if using IAF
             s, t = st.split(self.dim, axis=1)
@@ -52,11 +52,11 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(0)
     
     #net = MyDense(64)
-    net = ARMLP(key, 2, 24) 
+    net = ARMLP(key, 2, 64) 
     x = jnp.ones((32,2))
     params = net.init(key, x)
     key = jax.random.split(key)[0]
-    flow = NormalizingFlow([MAF(key, 2)])
+    flow = NormalizingFlow([IAF(key, 2, hidden_dim=256)])
     prior = StandardGaussian(2)
     flow_dist = NormalizingFlowDist(prior, flow)
     
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     print("Getting train loop...")
     train_loop = get_test_loop(flow_dist)
     print("Training flow...")
-    params = train_loop(params=params_flow)
+    params = train_loop(params=params_flow, n_iter=2000, step_size=2e-4, batch_size=256)
     
     X = flow_dist.apply(params, key, 1000, method=flow_dist.sample)
     
